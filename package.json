@@ -1,6 +1,6 @@
 {
   "name": "pha-deploy",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "CLI token deployment and minting tool for Phantasma blockchain",
   "type": "commonjs",
   "main": "dist/index.js",
@@ -41,6 +41,7 @@
   "license": "MIT",
   "dependencies": {
     "@iarna/toml": "*",
+    "pha-deploy": "^0.2.3",
     "phantasma-sdk-ts": "^0.2.9",
     "yargs": "*"
   },

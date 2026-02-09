@@ -37,6 +37,12 @@ carbon_token_id = 0
 # Optional: If your token's series has been deployed already, provide carbon series ID below:
 carbon_token_series_id = 0
 
+# Mint fungible (optional; used by --mint-fungible)
+# If omitted, the CLI defaults the recipient to the WIF owner.
+# mint_fungible_to = "P2K..."
+# Amount is in atomic units (integer).
+# mint_fungible_amount = 1
+
 # Token ROM (HEX-encoded string, optional)
 rom = ""
 

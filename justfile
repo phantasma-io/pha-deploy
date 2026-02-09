@@ -70,6 +70,14 @@ mn: build
 mnd: build
     npm start -- --mint-nft --rpc-log --settings-log --dry-run
 
+[group('run')]
+mf: build
+    npm start -- --mint-fungible
+
+[group('run')]
+mfd: build
+    npm start -- --mint-fungible --rpc-log --settings-log --dry-run
+
 [group('manage')]
 switch-to-local-ts-sdk:
     cd ../phantasma-sdk-ts && just rb && cd - && rm -r --force node_modules/phantasma-sdk-ts && cp -r ../phantasma-sdk-ts node_modules/ && just rb

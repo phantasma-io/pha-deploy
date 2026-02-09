@@ -2,7 +2,7 @@
 
 CLI utility for deploying fungible tokens and NFTs on the Phantasma blockchain. The tool consumes structured metadata and token schemas defined in TOML configuration files and relies on the latest `phantasma-sdk-ts` builders for serialization.
 
-- Three primary actions: `--create-token`, `--create-series`, `--mint-nft`.
+- Four primary actions: `--create-token`, `--create-series`, `--mint-fungible`, `--mint-nft`.
 - Configuration-first workflow: fill in `config.toml` (JSON blobs embedded in TOML) and let the CLI generate and submit Carbon transactions.
 - Dry-run mode available for payload inspection without broadcasting.
 
@@ -172,6 +172,17 @@ Each action reads the active configuration, prints a summary (without exposing y
   - `token_schemas.rom` to drive ROM serialization.
   - `nft_metadata` containing per-instance values.
 
+- **Mint fungible tokens**
+
+  ```bash
+  pha-deploy --mint-fungible --config path/to/config.toml
+  ```
+
+  Requirements:
+  - `carbon_token_id`.
+  - `mint_fungible_amount` (integer atomic units).
+  - Optional `mint_fungible_to` (defaults to the WIF owner when omitted).
+
 Append `--dry-run` to any command to inspect the serialized payload without submitting it:
 
 ```bash
@@ -244,6 +255,7 @@ Action selectors (first match wins):
 
 - `--create-token`
 - `--create-series`
+- `--mint-fungible`
 - `--mint-nft`
 
 Common utility flags:
@@ -264,6 +276,8 @@ Configuration overrides (values override `config.toml` when provided):
 - `--fungible-decimals <0..255>` – decimals for fungible token (required when token-type is `fungible`).
 - `--carbon-token-id <int>` – existing carbon token id (for series or mint).
 - `--carbon-token-series-id <int>` – existing series id (for mint).
+- `--mint-fungible-to <address>` – recipient address for fungible mint (default: WIF owner).
+- `--mint-fungible-amount <int>` – amount to mint (integer atomic units).
 - `--rom <hex>` – token ROM as hex string.
 - `--token-schemas '<json>'` – inline JSON for token schemas (`seriesMetadata`, `rom`, `ram`).
 - `--token-metadata '<json>'` – inline JSON for token metadata fields.

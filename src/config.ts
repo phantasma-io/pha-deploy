@@ -30,6 +30,10 @@ export interface Config {
   // NFT-specific
   nftMetadata?: MetadataField[] | null;
 
+  // Mint fungible
+  mintFungibleTo?: string | null;
+  mintFungibleAmount?: bigint | null;
+
   // Limits / sizes
   createTokenMaxData?: bigint | null;
   createTokenSeriesMaxData?: bigint | null;
@@ -250,6 +254,8 @@ export function loadConfig(options?: {
     tokenMaxSupply: null,
     fungibleDecimals: null,
     nftMetadata: null,
+    mintFungibleTo: null,
+    mintFungibleAmount: null,
     createTokenMaxData: null,
     createTokenSeriesMaxData: null,
     mintTokenMaxData: null,
@@ -286,6 +292,20 @@ export function loadConfig(options?: {
         | number
         | undefined,
     ) ?? null;
+
+  // Mint-fungible args (optional; required only for --mint-fungible action).
+  cfg.mintFungibleTo =
+    (pickValue(argv, "mint-fungible-to", "mint_fungible_to") as
+      | string
+      | undefined) ?? null;
+  cfg.mintFungibleAmount =
+    parseBigInt(
+      pickValue(argv, "mint-fungible-amount", "mint_fungible_amount") as
+        | string
+        | bigint
+        | undefined,
+    ) ?? null;
+
   cfg.rom = (pickValue(argv, "rom", "rom") as string | undefined) ?? null;
 
   const tokenTypeRaw = pickValue(argv, "token-type", "token_type") as
