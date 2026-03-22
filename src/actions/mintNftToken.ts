@@ -2,18 +2,32 @@ import {
   Bytes32,
   CarbonBlob,
   hexToBytes,
-  getRandomPhantasmaId,
   MintNftFeeOptions,
-  MintNonFungibleTxHelper,
-  NftRomBuilder,
+  MintPhantasmaNonFungibleTxHelper,
   PhantasmaAPI,
+  PhantasmaNftRomBuilder,
   PhantasmaKeys,
   SignedTxMsg,
+  TokenHelper,
   VmStructSchema,
   MetadataField,
 } from "phantasma-sdk-ts";
 import { waitForTx } from "./waitForTx";
 import { bigintReplacer, formatForLog } from "./helpers";
+
+function bytes32HexToRpcDecimal(hex: string): string {
+  if (hex.length === 0) {
+    return "0";
+  }
+
+  // RPC/public read paths interpret the raw Bytes32 `_i` word as an unsigned little-endian integer.
+  const littleEndianHex = Array.from(hexToBytes(hex))
+    .reverse()
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  return BigInt(`0x${littleEndianHex}`).toString();
+}
 
 export class mintNftTokenCfg {
   constructor(
@@ -21,7 +35,7 @@ export class mintNftTokenCfg {
     public nexus: string,
     public wif: string,
     public carbonTokenId: bigint,
-    public carbonSeriesId: number,
+    public phantasmaSeriesId: bigint,
     public nftRomSchema: VmStructSchema,
     public nftMetadata: MetadataField[],
     public gasFeeBase: bigint,
@@ -32,7 +46,7 @@ export class mintNftTokenCfg {
     this.nexus = nexus;
     this.wif = wif;
     this.carbonTokenId = carbonTokenId;
-    this.carbonSeriesId = carbonSeriesId;
+    this.phantasmaSeriesId = phantasmaSeriesId;
     this.nftRomSchema = nftRomSchema;
     this.nftMetadata = nftMetadata;
     this.gasFeeBase = gasFeeBase;
@@ -62,18 +76,15 @@ export async function mintNftToken(
   const txSender = PhantasmaKeys.fromWIF(cfg.wif);
   const senderPubKey = new Bytes32(txSender.PublicKey);
 
-  const newPhantasmaNftId = await getRandomPhantasmaId();
-
   if (logSettings) {
     console.log(
-      `Minting new token '${newPhantasmaNftId}' using these settings:`,
+      "Minting NFT through deterministic chain-generated id flow using these settings:",
       JSON.stringify(cfg.toPrintable(), bigintReplacer, 2),
     );
   }
 
-  const rom = NftRomBuilder.buildAndSerialize(
+  const rom = PhantasmaNftRomBuilder.buildAndSerialize(
     cfg.nftRomSchema,
-    newPhantasmaNftId,
     cfg.nftMetadata
   );
 
@@ -82,9 +93,9 @@ export async function mintNftToken(
     cfg.gasFeeMultiplier,
   );
 
-  const tx = MintNonFungibleTxHelper.buildTxAndSignHex(
+  const tx = MintPhantasmaNonFungibleTxHelper.buildTxAndSignHex(
     cfg.carbonTokenId,
-    cfg.carbonSeriesId,
+    cfg.phantasmaSeriesId,
     txSender,
     senderPubKey,
     rom,
@@ -109,12 +120,19 @@ export async function mintNftToken(
   const { success, result } = await waitForTx(rpc, txHash);
 
   if (success) {
-    const carbonNftAddresses = MintNonFungibleTxHelper.parseResult(
+    const mintResults = MintPhantasmaNonFungibleTxHelper.parseResult(result);
+    if (mintResults.length === 0) {
+      throw new Error("Deterministic mint result is empty");
+    }
+
+    const carbonNftAddress = TokenHelper.getNftAddress(
       cfg.carbonTokenId,
-      result,
+      mintResults[0].carbonInstanceId,
     );
+    const mintedPhantasmaNftIdHex = mintResults[0].phantasmaNftId.ToHex();
+    const mintedPhantasmaNftId = bytes32HexToRpcDecimal(mintedPhantasmaNftIdHex);
     console.log(
-      `Deployed NFT with phantasma ID ${newPhantasmaNftId} and carbon NFT address ${carbonNftAddresses[0].ToHex()}`,
+      `Minted NFT with phantasma ID ${mintedPhantasmaNftId} (0x${mintedPhantasmaNftIdHex}) and carbon NFT address ${carbonNftAddress.ToHex()}`,
     );
   } else {
     console.log("Could not mint NFT");

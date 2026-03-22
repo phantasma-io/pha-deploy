@@ -34,8 +34,10 @@ token_type = "nft"
 
 # Optional: If your token has been deployed already, provide carbon token ID below:
 carbon_token_id = 0
-# Optional: If your token's series has been deployed already, provide carbon series ID below:
+# Optional: If your token's series has been deployed already, provide both identifiers below.
+# Deterministic NFT mint uses `phantasma_series_id`; `carbon_token_series_id` is optional and informational / read-path only.
 carbon_token_series_id = 0
+phantasma_series_id = 0
 
 # Mint fungible (optional; used by --mint-fungible)
 # If omitted, the CLI defaults the recipient to the WIF owner.
@@ -47,11 +49,11 @@ carbon_token_series_id = 0
 rom = ""
 
 # Token schemas, fixed on token deployment.
-# If seriesMetadata is empty, it will contain mode and rom fields, cannot be removed.
+# If seriesMetadata is empty, the runtime still persists its own structural fields.
 # If ram is empty, we use dynamical structure without schema for NFT RAM.
 # Metadata can be moved between seriesMetadata and rom to make it shared.
-# Mandatory fields name, description, imageURL, infoURL, royalties must be availabe either in seriesMetadata or in NFT's rom.
-# Nft's rom will contain rom field which cannot be removed.
+# Mandatory fields name, description, imageURL, infoURL, royalties must be available either in seriesMetadata or in NFT public rom payload.
+# Keep this config schema focused on ordinary metadata fields; do not add reserved service fields such as `_i` or nested `rom`.
 token_schemas="""
 {
   "seriesMetadata": [
@@ -91,14 +93,16 @@ token_metadata="""
 #}
 #"""
 
-# No shared metadata:
+# Minimal shared metadata required by the bundled example schema.
+# This example keeps per-instance identity-driving bytes in `nft_metadata`; the high-level deterministic mint path derives `_i` and the internal nested rom itself.
 series_metadata="""
 {
+  "extraSharedSampleField": "example-shared-value"
 }
 """
 
 # NFT instance metadata
-# Used when minting NFT instances, passed if no series shared metadata is set or per-instance override is required:
+# Public per-instance payload used by deterministic minting. Do not add `_i` or nested `rom` here.
 # Royalties: numeric value - 10000000 = 1%
 nft_metadata="""
 {
@@ -106,7 +110,8 @@ nft_metadata="""
   "description": "Test NFT Description",
   "imageURL": "images-assets.nasa.gov/image/PIA13227/PIA13227~orig.jpg",
   "infoURL": "https://images.nasa.gov/details/PIA13227",
-  "royalties": 10000000
+  "royalties": 10000000,
+  "extraSampleField": "example-nft-value"
 }
 """
 

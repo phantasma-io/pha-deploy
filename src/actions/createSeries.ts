@@ -112,7 +112,9 @@ export async function createSeries(
 
   if (success) {
     var seriesId = CreateTokenSeriesTxHelper.parseResult(result);
-    console.log("Deployed carbon series ID:", seriesId);
+    console.log(
+      `Deployed series with phantasma ID ${newPhantasmaSeriesId.toString()} and carbon series ID ${seriesId}`,
+    );
   } else {
     console.log("Could not deploy series");
   }

@@ -16,6 +16,7 @@ export interface Config {
   // Token
   symbol?: string | null;
   carbonTokenId?: bigint | null;
+  phantasmaSeriesId?: bigint | null;
   rom?: string | null;
   tokenSchemas?: TokenSchemas | null;
   tokenMetadata: Metadata;
@@ -290,6 +291,13 @@ export function loadConfig(options?: {
       pickValue(argv, "carbon-token-series-id", "carbon_token_series_id") as
         | string
         | number
+        | undefined,
+    ) ?? null;
+  cfg.phantasmaSeriesId =
+    parseBigInt(
+      pickValue(argv, "phantasma-series-id", "phantasma_series_id") as
+        | string
+        | bigint
         | undefined,
     ) ?? null;
 

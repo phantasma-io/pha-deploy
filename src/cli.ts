@@ -54,7 +54,7 @@ Overrides (replace values from config.toml when provided):
   --fungible-max-supply <int>   Alias for --token-max-supply
   --fungible-decimals <0..255>  Decimal places; required when token-type=fungible
   --carbon-token-id <int>       Existing carbon token ID (for series or mint)
-  --carbon-token-series-id <int> Existing series ID (for mint)
+  --phantasma-series-id <int>   Existing Phantasma series ID (required for deterministic mint)
   --mint-fungible-to <address>  Recipient address for fungible mint (default: WIF owner)
   --mint-fungible-amount <int>  Amount to mint (integer atomic units)
   --rom <hex>                   Token ROM hex (optional; for token creation)
@@ -176,7 +176,7 @@ async function actionMintNft(
   requireArg(cfg.nexus, "nexus");
   requireArg(cfg.wif, "wif");
   requireArg(cfg.carbonTokenId, "carbon_token_id");
-  requireArg(cfg.carbonTokenSeriesId, "carbon_token_series_id");
+  requireArg(cfg.phantasmaSeriesId, "phantasma_series_id");
   requireArg(cfg.tokenSchemas, "token_schemas");
   requireArg(cfg.nftMetadata, "nft_metadata");
   requireArg(cfg.gasFeeBase, "gas_fee_base");
@@ -189,7 +189,7 @@ async function actionMintNft(
       cfg.nexus,
       cfg.wif,
       cfg.carbonTokenId,
-      cfg.carbonTokenSeriesId,
+      cfg.phantasmaSeriesId,
       cfg.tokenSchemas.rom,
       cfg.nftMetadata,
       cfg.gasFeeBase,

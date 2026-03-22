@@ -47,7 +47,7 @@ Key sections in `config/config.example.toml`:
   `symbol`, `token_type` (`"nft"` or `"fungible"`), optional `token_max_supply` / `fungible_max_supply` and `fungible_decimals` (mandatory for fungible tokens), optional `rom` (hex string) for Carbon token ROM.
 
 - **Carbon identifiers**  
-  `carbon_token_id` (required for series creation or minting against an existing token) and `carbon_token_series_id` (required for minting).
+  `carbon_token_id` is required for series creation or minting against an existing token. `phantasma_series_id` is required for deterministic NFT mint. `carbon_token_series_id` is optional and informational for read paths.
 
 - **Metadata blobs**  
   Each metadata block is a multi-line JSON string embedded in TOML:
@@ -67,7 +67,7 @@ Key sections in `config/config.example.toml`:
   - `token_metadata` is **mandatory** for all tokens. Required fields: `name`, `icon`, `url`, `description`.  
     The `icon` must be a base64 encoded data URI (`data:image/png;base64,...`, `data:image/jpeg;base64,...`, or `data:image/webp;base64,...`).
   - `series_metadata` (optional) defines shared metadata for NFT series. Populate when metadata should be stored once at the series level.
-  - `nft_metadata` (optional) defines per-instance defaults for minting. You can override fields per mint by editing this block before running `--mint-nft`.
+  - `nft_metadata` (optional) defines the public per-instance NFT payload for deterministic minting. Do not include reserved service fields such as `_i` or nested `rom`; the chain derives them internally on the high-level mint path.
   - Numeric settings such as `royalties` should be plain numbers (e.g. `10000000` for 1%).
 
 - **Token schemas**  
@@ -93,7 +93,8 @@ Key sections in `config/config.example.toml`:
   ```
 
   Rules enforced by the SDK:
-  - Mandatory fields `name`, `description`, `imageURL`, `infoURL`, `royalties` must appear either in `seriesMetadata` (shared) or in `rom` (per NFT); the builder fills core structural fields such as the Carbon `id`, `mode`, and `rom` placeholders automatically.
+  - Mandatory fields `name`, `description`, `imageURL`, `infoURL`, `royalties` must appear either in `seriesMetadata` (shared) or in `rom` (per NFT public payload).
+  - Keep `token_schemas.rom` focused on ordinary NFT metadata. Reserved service fields such as `_i` and nested `rom` are owned by the chain on the high-level deterministic mint path and must not be supplied by callers in config metadata.
   - Field `type` values must match `VmType` names understood by the SDK. Supported values:
 
     ```
@@ -168,9 +169,9 @@ Each action reads the active configuration, prints a summary (without exposing y
   ```
 
   Requirements:
-  - `carbon_token_id` and `carbon_token_series_id`.
+  - `carbon_token_id` and `phantasma_series_id`.
   - `token_schemas.rom` to drive ROM serialization.
-  - `nft_metadata` containing per-instance values.
+  - `nft_metadata` containing public per-instance values only; do not pass `_i` or nested `rom`.
 
 - **Mint fungible tokens**
 
@@ -241,7 +242,7 @@ pha-deploy --mint-nft \
   --nexus testnet \
   --wif <WIF> \
   --carbon-token-id <TOKEN_ID> \
-  --carbon-token-series-id <SERIES_ID> \
+  --phantasma-series-id <PHANTASMA_SERIES_ID> \
   --token-schemas "$TOKEN_SCHEMAS_JSON" \
   --nft-metadata "$NFT_METADATA_JSON" \
   --mint-token-max-data 100000000 \
@@ -275,14 +276,15 @@ Configuration overrides (values override `config.toml` when provided):
 - `--token-max-supply <int>` / `--fungible-max-supply <int>` – max supply (required when token-type is `fungible`).
 - `--fungible-decimals <0..255>` – decimals for fungible token (required when token-type is `fungible`).
 - `--carbon-token-id <int>` – existing carbon token id (for series or mint).
-- `--carbon-token-series-id <int>` – existing series id (for mint).
+- `--carbon-token-series-id <int>` – optional carbon series id for read-path correlation.
+- `--phantasma-series-id <int>` – existing Phantasma series id required by deterministic NFT mint.
 - `--mint-fungible-to <address>` – recipient address for fungible mint (default: WIF owner).
 - `--mint-fungible-amount <int>` – amount to mint (integer atomic units).
 - `--rom <hex>` – token ROM as hex string.
 - `--token-schemas '<json>'` – inline JSON for token schemas (`seriesMetadata`, `rom`, `ram`).
 - `--token-metadata '<json>'` – inline JSON for token metadata fields.
 - `--series-metadata '<json>'` – inline JSON object or array of `{ name, value }` pairs.
-- `--nft-metadata '<json>'` – inline JSON object or array of `{ name, value }` pairs.
+- `--nft-metadata '<json>'` – inline JSON object or array of `{ name, value }` pairs for the public per-instance payload; do not include `_i` or nested `rom`.
 - `--create-token-max-data <int>` – payload limit for token creation.
 - `--create-token-series-max-data <int>` – payload limit for series creation.
 - `--mint-token-max-data <int>` – payload limit for minting.
