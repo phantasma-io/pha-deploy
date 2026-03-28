@@ -7,13 +7,14 @@ import {
   buildCompileArgs,
   findExecutableInPath,
   isSemverGte,
+  resolveSupportedCompiler,
   selectCompiledContractArtifacts,
 } from "../src/contract/compiler";
 
-test("semantic version gate accepts newer patch versions", () => {
-  assert.equal(isSemverGte("2.0.1", "2.0.0"), true);
-  assert.equal(isSemverGte("2.0.0", "2.0.0"), true);
-  assert.equal(isSemverGte("1.9.9", "2.0.0"), false);
+test("semantic version gate accepts the supported tomb baseline and newer patches", () => {
+  assert.equal(isSemverGte("2.1.1", "2.1.0"), true);
+  assert.equal(isSemverGte("2.1.0", "2.1.0"), true);
+  assert.equal(isSemverGte("2.0.9", "2.1.0"), false);
 });
 
 test("findExecutableInPath resolves the first executable match", () => {
@@ -28,6 +29,37 @@ test("findExecutableInPath resolves the first executable match", () => {
 
   const resolved = findExecutableInPath("pha-tomb", [binA, binB].join(path.delimiter), "linux");
   assert.equal(resolved, tombPath);
+});
+
+test("resolveSupportedCompiler prefers an explicit compiler path", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pha-deploy-compiler-"));
+  const compilerPath = path.join(tempRoot, "pha-tomb-custom");
+  fs.writeFileSync(
+    compilerPath,
+    "#!/usr/bin/env bash\nif [ \"$1\" = \"--version\" ]; then\n  echo 2.1.0\n  exit 0\nfi\nexit 0\n",
+    { mode: 0o755 },
+  );
+
+  const compiler = await resolveSupportedCompiler("2.1.0", "", compilerPath);
+
+  assert.equal(compiler.executablePath, compilerPath);
+  assert.equal(compiler.executableName, "pha-tomb-custom");
+  assert.equal(compiler.version, "2.1.0");
+});
+
+test("resolveSupportedCompiler rejects an explicit compiler path below the minimum version", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pha-deploy-compiler-old-"));
+  const compilerPath = path.join(tempRoot, "pha-tomb-old");
+  fs.writeFileSync(
+    compilerPath,
+    "#!/usr/bin/env bash\nif [ \"$1\" = \"--version\" ]; then\n  echo 2.0.1\n  exit 0\nfi\nexit 0\n",
+    { mode: 0o755 },
+  );
+
+  await assert.rejects(
+    () => resolveSupportedCompiler("2.1.0", "", compilerPath),
+    /below the minimum supported version 2\.1\.0/,
+  );
 });
 
 test("buildCompileArgs keeps compiler invocation strict and explicit", () => {

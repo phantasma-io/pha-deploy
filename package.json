@@ -1,6 +1,6 @@
 {
   "name": "pha-deploy",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "CLI for Phantasma token and contract lifecycle workflows",
   "type": "commonjs",
   "main": "dist/index.js",

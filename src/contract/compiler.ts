@@ -3,7 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 export const CONTRACT_COMPILER_NAME = "pha-tomb";
-export const MIN_SUPPORTED_PHA_TOMB_VERSION = "2.0.0";
+export const MIN_SUPPORTED_PHA_TOMB_VERSION = "2.1.0";
 
 export type NativeCheckMode = "off" | "warn" | "error";
 
@@ -170,11 +170,30 @@ export async function findInstalledCompiler(
   };
 }
 
+async function resolveExplicitCompiler(executablePath: string): Promise<InstalledCompiler> {
+  const normalizedPath = path.resolve(executablePath.trim());
+  try {
+    fs.accessSync(normalizedPath, fs.constants.X_OK);
+  } catch {
+    throw new Error(`${CONTRACT_COMPILER_NAME} is not executable: ${normalizedPath}`);
+  }
+
+  return {
+    executableName: path.basename(normalizedPath),
+    executablePath: normalizedPath,
+    version: await queryCompilerVersion(normalizedPath),
+  };
+}
+
 export async function resolveSupportedCompiler(
   minimumVersion: string = MIN_SUPPORTED_PHA_TOMB_VERSION,
   envPath: string = process.env.PATH ?? "",
+  explicitPath?: string,
 ): Promise<InstalledCompiler> {
-  const compiler = await findInstalledCompiler(envPath);
+  const requestedPath = explicitPath?.trim();
+  const compiler = requestedPath
+    ? await resolveExplicitCompiler(requestedPath)
+    : await findInstalledCompiler(envPath);
   if (!compiler) {
     throw new Error(`${CONTRACT_COMPILER_NAME} was not found in PATH`);
   }

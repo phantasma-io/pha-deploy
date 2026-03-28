@@ -27,16 +27,17 @@ import { buildVersionReport, renderVersionReport } from "./version";
 
 function printHelp(): void {
   const text = `Usage:
-  pha-deploy contract <compile|deploy|upgrade> [options]
+  pha-deploy contract <compile|deploy|upgrade|attach> [options]
   pha-deploy --create-token [options]
   pha-deploy --create-series [options]
   pha-deploy --mint-fungible [options]
   pha-deploy --mint-nft [options]
 
 Actions:
-  contract compile       Compile a contract through the system-installed pha-tomb
+  contract compile       Compile a contract through pha-tomb from PATH or an explicit override
   contract deploy        Deploy a compiled contract bundle
   contract upgrade       Upgrade a compiled contract bundle
+  contract attach        Attach a compiled contract bundle to an existing token
   --create-token       Create a token
   --create-series      Create a token series
   --mint-fungible      Mint fungible tokens

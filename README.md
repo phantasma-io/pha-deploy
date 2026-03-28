@@ -12,15 +12,16 @@ Current surface area:
   - `contract compile`
   - `contract deploy`
   - `contract upgrade`
+  - `contract attach`
 - `--version` prints both the `pha-deploy` version and the resolved `pha-tomb` version/path.
 - Dry-run mode is available for token and contract transactions.
 
 ## Requirements
 
 - Node.js `>=16`
-- `pha-tomb >= 2.0.0` must be installed in `PATH` for `contract compile`
+- `pha-tomb >= 2.1.0` must be available for `contract compile`, either in `PATH` or through `--compiler` / `PHA_TOMB_PATH`
 
-`contract deploy` and `contract upgrade` do not invoke the compiler directly. They work from a compiled artifact bundle or explicit `--script` / `--abi` inputs.
+`contract deploy`, `contract upgrade`, and `contract attach` do not invoke the compiler directly. They work from a compiled artifact bundle or explicit `--script` / `--abi` inputs.
 
 ## Installation
 
@@ -40,15 +41,15 @@ node dist/cli.js --help
 Example version output:
 
 ```text
-pha-deploy 0.3.0
-pha-tomb version 2.0.0
+pha-deploy 0.5.0
+pha-tomb version 2.1.0
 pha-tomb path /usr/local/bin/pha-tomb
 ```
 
 ## Usage
 
 ```bash
-pha-deploy contract <compile|deploy|upgrade> [options]
+pha-deploy contract <compile|deploy|upgrade|attach> [options]
 pha-deploy --create-token [options]
 pha-deploy --create-series [options]
 pha-deploy --mint-fungible [options]
@@ -120,11 +121,12 @@ Required token inputs by action:
 
 ### 1. Compile
 
-Compile a `.tomb` source file through the system-installed `pha-tomb`.
+Compile a `.tomb` source file through `pha-tomb` from `PATH`, or pin an exact local compiler with `--compiler` / `PHA_TOMB_PATH`.
 
 ```bash
 pha-deploy contract compile \
   --source ./contracts/demo.tomb \
+  --compiler /path/to/pha-tomb \
   --out ./dist/contracts/demo \
   --debug \
   --protocol 16 \
@@ -134,12 +136,15 @@ pha-deploy contract compile \
 Supported compile flags:
 
 - `--source <path>`: required `.tomb` source file
+- `--compiler <path>`: optional explicit `pha-tomb` executable path; takes precedence over `PHA_TOMB_PATH` and `PATH`
 - `--out <dir>`: final artifact bundle directory
 - `--contract-name <name>`: required when the compiler emits multiple modules and you need to pick one
 - `--protocol <number>`: passed through to `pha-tomb`
 - `--debug`: request debug artifacts
 - `--nativecheck <off|warn|error>`
 - `--libpath <path>`: repeatable additional library search path
+
+`PHA_TOMB_PATH=/path/to/pha-tomb` is also supported when `--compiler` is omitted and you want to avoid whichever `pha-tomb` happens to be first in `PATH`.
 
 Compile output:
 
@@ -155,7 +160,7 @@ Compile output:
   - optional `<contract>.pvm.hex`
   - optional `<contract>.abi.hex`
 
-`manifest.json` is the preferred handoff format for later deploy/upgrade commands.
+`manifest.json` is the preferred handoff format for later deploy/upgrade/attach commands.
 
 ### 2. Deploy
 
@@ -199,7 +204,24 @@ pha-deploy contract upgrade \
   --dry-run
 ```
 
-Shared deploy/upgrade flags:
+### 4. Attach
+
+Attach a compiled VM contract bundle to an already existing token symbol:
+
+```bash
+pha-deploy contract attach \
+  --rpc https://testnet.phantasma.info/rpc \
+  --nexus testnet \
+  --chain main \
+  --wif <WIF> \
+  --manifest ./dist/contracts/demo/manifest.json \
+  --symbol DEMO \
+  --dry-run
+```
+
+When `--symbol` is omitted, `contract attach` defaults to the bundle contract name from the manifest or direct artifact inputs.
+
+Shared deploy/upgrade/attach flags:
 
 - `--rpc <url>`: required
 - `--nexus <name>`: required
@@ -216,6 +238,10 @@ Shared deploy/upgrade flags:
 - `--payload-hex <hex>`
 - `--dry-run`
 
+Attach-only flag:
+
+- `--symbol <symbol>`: existing token symbol to attach to; defaults to the bundle contract name when omitted
+
 Deploy/upgrade output always includes:
 
 - operation
@@ -225,6 +251,8 @@ Deploy/upgrade output always includes:
 - ABI byte count
 - generated VM script hex
 - signed transaction hex
+
+Attach output also prints the resolved token symbol used for the interop call.
 
 When `--dry-run` is omitted, the CLI also broadcasts the transaction, waits for the tx result, and prints the tx hash.
 

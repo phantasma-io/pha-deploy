@@ -56,12 +56,17 @@ async function handleContractCompile(argv: {
   source: string;
   out?: string;
   contractName?: string;
+  compiler?: string;
   protocol?: number;
   debug?: boolean;
   nativeCheck?: NativeCheckMode;
   libpath?: string[];
 }): Promise<void> {
-  const compiler = await resolveSupportedCompiler(MIN_SUPPORTED_PHA_TOMB_VERSION);
+  const compiler = await resolveSupportedCompiler(
+    MIN_SUPPORTED_PHA_TOMB_VERSION,
+    process.env.PATH ?? "",
+    argv.compiler ?? process.env.PHA_TOMB_PATH,
+  );
   const sourcePath = path.resolve(argv.source);
   const preferredContractName = argv.contractName?.trim() || path.basename(sourcePath, path.extname(sourcePath));
   const outputDir = path.resolve(
@@ -127,6 +132,7 @@ async function handleContractBroadcast(
     nexus: string;
     chain?: string;
     wif: string;
+    symbol?: string;
     manifest?: string;
     contractName?: string;
     script?: string;
@@ -160,11 +166,15 @@ async function handleContractBroadcast(
     proofOfWork: parseOptionalInteger(argv.pow, "--pow"),
     payloadHex: argv.payloadHex,
     dryRun: argv.dryRun,
+    attachSymbol: argv.symbol,
   });
 
   console.log("Transaction:");
   console.log(`  operation: ${result.prepared.operation}`);
   console.log(`  contract: ${result.prepared.contractName}`);
+  if (result.prepared.attachSymbol) {
+    console.log(`  symbol: ${result.prepared.attachSymbol}`);
+  }
   console.log(`  from: ${result.prepared.fromAddress}`);
   console.log(`  script bytes: ${result.prepared.scriptBytes}`);
   console.log(`  abi bytes: ${result.prepared.abiBytes}`);
@@ -192,13 +202,17 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
     .scriptName("pha-deploy contract")
     .command(
       "compile",
-      "Compile a contract through the system-installed pha-tomb",
+      "Compile a contract through pha-tomb from PATH or an explicit override",
       (cmd) =>
         cmd
           .option("source", {
             type: "string",
             demandOption: true,
             describe: "Path to the .tomb source file",
+          })
+          .option("compiler", {
+            type: "string",
+            describe: "Explicit pha-tomb executable path (overrides PHA_TOMB_PATH and PATH)",
           })
           .option("out", {
             type: "string",
@@ -231,6 +245,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           source: argv.source,
           out: argv.out,
           contractName: argv["contract-name"],
+          compiler: argv.compiler,
           protocol: argv.protocol,
           debug: argv.debug,
           nativeCheck: argv.nativecheck as NativeCheckMode | undefined,
@@ -301,6 +316,49 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           nexus: argv.nexus,
           chain: argv.chain,
           wif: argv.wif,
+          manifest: argv.manifest,
+          contractName: argv["contract-name"],
+          script: argv.script,
+          abi: argv.abi,
+          debug: argv.debug,
+          gasPrice: argv["gas-price"],
+          gasLimit: argv["gas-limit"],
+          pow: argv.pow,
+          payloadHex: argv["payload-hex"],
+          dryRun: argv["dry-run"],
+        });
+      },
+    )
+    .command(
+      "attach",
+      "Attach a compiled contract bundle to an existing token symbol",
+      (cmd) =>
+        cmd
+          .option("rpc", { type: "string", demandOption: true, describe: "RPC endpoint" })
+          .option("nexus", { type: "string", demandOption: true, describe: "Nexus name" })
+          .option("chain", { type: "string", default: "main", describe: "Target chain" })
+          .option("wif", { type: "string", demandOption: true, describe: "WIF used to sign the transaction" })
+          .option("symbol", {
+            type: "string",
+            describe: "Existing token symbol to attach to (defaults to the bundle contract name)",
+          })
+          .option("manifest", { type: "string", describe: "Path to manifest.json produced by contract compile" })
+          .option("contract-name", { type: "string", describe: "Contract name when using direct --script/--abi inputs" })
+          .option("script", { type: "string", describe: "Path to compiled .pvm file when not using --manifest" })
+          .option("abi", { type: "string", describe: "Path to compiled .abi file when not using --manifest" })
+          .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
+          .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
+          .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
+          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the legacy VM transaction" })
+          .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
+          .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
+      async (argv) => {
+        await handleContractBroadcast("attach", {
+          rpc: argv.rpc,
+          nexus: argv.nexus,
+          chain: argv.chain,
+          wif: argv.wif,
+          symbol: argv.symbol,
           manifest: argv.manifest,
           contractName: argv["contract-name"],
           script: argv.script,
