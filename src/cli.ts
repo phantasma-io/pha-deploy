@@ -8,6 +8,8 @@ import { createSeries, createSeriesCfg } from "./actions/createSeries";
 import { mintFungibleToken, mintFungibleTokenCfg } from "./actions/mintFungibleToken";
 import { mintNftToken, mintNftTokenCfg } from "./actions/mintNftToken";
 import { PhantasmaKeys, setLogger } from "phantasma-sdk-ts";
+import { runContractCli } from "./cli-contract";
+import { buildVersionReport, renderVersionReport } from "./version";
 
 /**
  * CLI for pha-deploy.
@@ -25,12 +27,16 @@ import { PhantasmaKeys, setLogger } from "phantasma-sdk-ts";
 
 function printHelp(): void {
   const text = `Usage:
+  pha-deploy contract <compile|deploy|upgrade> [options]
   pha-deploy --create-token [options]
   pha-deploy --create-series [options]
   pha-deploy --mint-fungible [options]
   pha-deploy --mint-nft [options]
 
 Actions:
+  contract compile       Compile a contract through the system-installed pha-tomb
+  contract deploy        Deploy a compiled contract bundle
+  contract upgrade       Upgrade a compiled contract bundle
   --create-token       Create a token
   --create-series      Create a token series
   --mint-fungible      Mint fungible tokens
@@ -240,6 +246,16 @@ async function actionMintFungible(
 async function main() {
   const rawArgv = hideBin(process.argv);
 
+  if (rawArgv.length === 1 && (rawArgv[0] === "--version" || rawArgv[0] === "-v")) {
+    console.log(renderVersionReport(await buildVersionReport()));
+    return;
+  }
+
+  if (rawArgv[0] === "contract") {
+    await runContractCli(rawArgv.slice(1));
+    return;
+  }
+
   // Pre-parse --config and --help early so the TOML file can be loaded before the main yargs parsing.
   const pre = yargs(rawArgv)
     .option("config", {
@@ -321,7 +337,7 @@ async function main() {
       type: "string",
       describe: "Amount to mint (integer atomic units)",
     })
-    .version()
+    .version(false)
     .epilog("pha-deploy - Phantasma token deployment and minting CLI");
 
   const argv = await parser.parseAsync();

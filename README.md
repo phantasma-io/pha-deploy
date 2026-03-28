@@ -1,299 +1,276 @@
 # pha-deploy
 
-CLI utility for deploying fungible tokens and NFTs on the Phantasma blockchain. The tool consumes structured metadata and token schemas defined in TOML configuration files and relies on the latest `phantasma-sdk-ts` builders for serialization.
+CLI for Phantasma token flows and contract lifecycle workflows.
 
-- Four primary actions: `--create-token`, `--create-series`, `--mint-fungible`, `--mint-nft`.
-- Configuration-first workflow: fill in `config.toml` (JSON blobs embedded in TOML) and let the CLI generate and submit Carbon transactions.
-- Dry-run mode available for payload inspection without broadcasting.
+Current surface area:
+- Token actions:
+  - `--create-token`
+  - `--create-series`
+  - `--mint-fungible`
+  - `--mint-nft`
+- Contract actions:
+  - `contract compile`
+  - `contract deploy`
+  - `contract upgrade`
+- `--version` prints both the `pha-deploy` version and the resolved `pha-tomb` version/path.
+- Dry-run mode is available for token and contract transactions.
 
----
+## Requirements
 
-## Quick Start
+- Node.js `>=16`
+- `pha-tomb >= 2.0.0` must be installed in `PATH` for `contract compile`
+
+`contract deploy` and `contract upgrade` do not invoke the compiler directly. They work from a compiled artifact bundle or explicit `--script` / `--abi` inputs.
+
+## Installation
 
 ```bash
-# install globally (recommended for CLI usage)
+# global install
 npm i -g pha-deploy
 
-# or run once via npx
-npx pha-deploy --help
+# inspect the installed CLI and compiler binding
+pha-deploy --version
 
-# local dev install
+# local development install
 npm install
-
-# copy the sample configuration and adjust it to your needs
-cp config/config.example.toml config.toml
-
-# build the CLI
 npm run build
-
-# run an action (uses config.toml by default)
-pha-deploy --create-token
+node dist/cli.js --help
 ```
 
-Helper `just` recipes are available (`just ct`, `just cs`, `just mn`, etc.) if you have [`just`](https://github.com/casey/just) installed.
+Example version output:
 
----
+```text
+pha-deploy 0.3.0
+pha-tomb version 2.0.0
+pha-tomb path /usr/local/bin/pha-tomb
+```
 
-## Configuration Overview
-
-All configuration is read from `config.toml` (or an alternate file passed via `--config`). CLI flags remain available for overrides, but the recommended flow is to edit `config.toml` and keep secrets outside of version control.
-
-Key sections in `config/config.example.toml`:
-
-- **Connection**  
-  `rpc`, `nexus`, `wif`. `wif` may be left empty for dry runs.
-
-- **Token definition**  
-  `symbol`, `token_type` (`"nft"` or `"fungible"`), optional `token_max_supply` / `fungible_max_supply` and `fungible_decimals` (mandatory for fungible tokens), optional `rom` (hex string) for Carbon token ROM.
-
-- **Carbon identifiers**  
-  `carbon_token_id` is required for series creation or minting against an existing token. `phantasma_series_id` is required for deterministic NFT mint. `carbon_token_series_id` is optional and informational for read paths.
-
-- **Metadata blobs**  
-  Each metadata block is a multi-line JSON string embedded in TOML:
-
-  ```toml
-  token_metadata = """
-  {
-    "name": "My test token!",
-    "icon": "data:image/webp;base64,...",
-    "url": "https://example.com",
-    "description": "Token description",
-    "extraField": "Optional custom data"
-  }
-  """
-  ```
-
-  - `token_metadata` is **mandatory** for all tokens. Required fields: `name`, `icon`, `url`, `description`.  
-    The `icon` must be a base64 encoded data URI (`data:image/png;base64,...`, `data:image/jpeg;base64,...`, or `data:image/webp;base64,...`).
-  - `series_metadata` (optional) defines shared metadata for NFT series. Populate when metadata should be stored once at the series level.
-  - `nft_metadata` (optional) defines the public per-instance NFT payload for deterministic minting. Do not include reserved service fields such as `_i` or nested `rom`; the chain derives them internally on the high-level mint path.
-  - Numeric settings such as `royalties` should be plain numbers (e.g. `10000000` for 1%).
-
-- **Token schemas**  
-  `token_schemas` is a JSON object describing the Carbon VM schemas used for series metadata, NFT ROM, and NFT RAM. Example structure:
-
-  ```toml
-  token_schemas = """
-  {
-    "seriesMetadata": [
-      { "name": "extraSharedSampleField", "type": "String" }
-    ],
-    "rom": [
-      { "name": "name", "type": "String" },
-      { "name": "description", "type": "String" },
-      { "name": "imageURL", "type": "String" },
-      { "name": "infoURL", "type": "String" },
-      { "name": "royalties", "type": "Int32" },
-      { "name": "extraSampleField", "type": "String" }
-    ],
-    "ram": []
-  }
-  """
-  ```
-
-  Rules enforced by the SDK:
-  - Mandatory fields `name`, `description`, `imageURL`, `infoURL`, `royalties` must appear either in `seriesMetadata` (shared) or in `rom` (per NFT public payload).
-  - Keep `token_schemas.rom` focused on ordinary NFT metadata. Reserved service fields such as `_i` and nested `rom` are owned by the chain on the high-level deterministic mint path and must not be supplied by callers in config metadata.
-  - Field `type` values must match `VmType` names understood by the SDK. Supported values:
-
-    ```
-    Dynamic
-    Array
-    Bytes
-    Struct
-    Int8
-    Int16
-    Int32
-    Int64
-    Int256
-    Bytes16
-    Bytes32
-    Bytes64
-    String
-    Array_Dynamic
-    Array_Bytes
-    Array_Struct
-    Array_Int8
-    Array_Int16
-    Array_Int32
-    Array_Int64
-    Array_Int256
-    Array_Bytes16
-    Array_Bytes32
-    Array_Bytes64
-    Array_String
-    ```
-  - Leave `ram` empty (`[]`) to use a dynamic RAM schema; provide field definitions if you need strict RAM layout.
-
-- **Limits and fees**  
-  `create_token_max_data`, `create_token_series_max_data`, `mint_token_max_data`, `gas_fee_*` entries are numeric boundaries passed to the transaction helpers. The bundled defaults are tuned for typical deployments and are a safe starting point; change them only if you know you need higher caps or different fee multipliers.
-
-- **Runtime flags**  
-  `dry_run` toggles dry-run mode when set to `true` in TOML. `config_path` is automatically injected when you load a custom file via `--config`.
-
-Ensure every value present in `config.example.toml` is reviewed and updated (or deliberately left as default) before sending real transactions.
-
----
-
-## Running Actions
-
-Each action reads the active configuration, prints a summary (without exposing your WIF), and either broadcasts or exits depending on `--dry-run`.
-
-- **Create a token**
-
-  ```bash
-  pha-deploy --create-token --config path/to/config.toml
-  ```
-
-  Requirements:
-  - `token_type` must be set (`nft` or `fungible`).
-  - For fungible tokens provide `token_max_supply` / `fungible_max_supply` and `fungible_decimals`.
-  - `token_metadata` and (for NFTs) `token_schemas` must be present.
-
-- **Create an NFT series**
-
-  ```bash
-  pha-deploy --create-series --config path/to/config.toml
-  ```
-
-  Requirements:
-  - `carbon_token_id` referencing the deployed token.
-  - `token_schemas.seriesMetadata` describing the shared schema used for the series.
-  - Optional metadata comes from `series_metadata`.
-
-- **Mint an NFT**
-
-  ```bash
-  pha-deploy --mint-nft --config path/to/config.toml
-  ```
-
-  Requirements:
-  - `carbon_token_id` and `phantasma_series_id`.
-  - `token_schemas.rom` to drive ROM serialization.
-  - `nft_metadata` containing public per-instance values only; do not pass `_i` or nested `rom`.
-
-- **Mint fungible tokens**
-
-  ```bash
-  pha-deploy --mint-fungible --config path/to/config.toml
-  ```
-
-  Requirements:
-  - `carbon_token_id`.
-  - `mint_fungible_amount` (integer atomic units).
-  - Optional `mint_fungible_to` (defaults to the WIF owner when omitted).
-
-Append `--dry-run` to any command to inspect the serialized payload without submitting it:
+## Usage
 
 ```bash
-pha-deploy --create-token --dry-run
+pha-deploy contract <compile|deploy|upgrade> [options]
+pha-deploy --create-token [options]
+pha-deploy --create-series [options]
+pha-deploy --mint-fungible [options]
+pha-deploy --mint-nft [options]
 ```
 
----
+## Token Workflow
 
+Token actions still support the config-first TOML flow.
 
-## Usage without config.toml
-
-These examples do not use `config.toml`. Every required value is passed via CLI flags. All JSON values **must** be single-line strings; line breaks will break JSON parsing.
+Typical setup:
 
 ```bash
-TOKEN_SCHEMAS_JSON='{"seriesMetadata":[{"name":"extraSharedSampleField","type":"String"}],"rom":[{"name":"name","type":"String"},{"name":"description","type":"String"},{"name":"imageURL","type":"String"},{"name":"infoURL","type":"String"},{"name":"royalties","type":"Int32"},{"name":"extraSampleField","type":"String"}],"ram":[]}'
-TOKEN_METADATA_JSON='{"name":"My test token!","icon":"data:image/png;base64,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","url":"http://example.com","description":"My test token description"}'
-
-pha-deploy --create-token \
-  --rpc https://testnet.phantasma.info/rpc \
-  --nexus testnet \
-  --wif <WIF> \
-  --symbol NFTMY \
-  --token-type nft \
-  --token-schemas "$TOKEN_SCHEMAS_JSON" \
-  --token-metadata "$TOKEN_METADATA_JSON" \
-  --create-token-max-data 1000000000 \
-  --gas-fee-base 10000 \
-  --gas-fee-create-token-base 10000000000 \
-  --gas-fee-create-token-symbol 10000000000 \
-  --gas-fee-multiplier 10000
+cp config/config.example.toml config.toml
+pha-deploy --create-token --config config.toml
 ```
 
-```bash
-TOKEN_SCHEMAS_JSON='{"seriesMetadata":[{"name":"extraSharedSampleField","type":"String"}],"rom":[{"name":"name","type":"String"},{"name":"description","type":"String"},{"name":"imageURL","type":"String"},{"name":"infoURL","type":"String"},{"name":"royalties","type":"Int32"},{"name":"extraSampleField","type":"String"}],"ram":[]}'
-SERIES_METADATA_JSON='{"rom":"0xAABBCC","extraSharedSampleField":"aabbsadsd"}'
+Common token flags:
 
-pha-deploy --create-series \
-  --rpc https://testnet.phantasma.info/rpc \
-  --nexus testnet \
-  --wif <WIF> \
-  --carbon-token-id <TOKEN_ID> \
-  --token-schemas "$TOKEN_SCHEMAS_JSON" \
-  --series-metadata "$SERIES_METADATA_JSON" \
-  --create-token-series-max-data 100000000 \
-  --gas-fee-base 10000 \
-  --gas-fee-create-token-series 2500000000 \
-  --gas-fee-multiplier 10000
-```
+- `--config <path>`: load TOML config, default `config.toml`
+- `--dry-run`: build/sign but do not broadcast
+- `--rpc-log`: enable SDK JSON-RPC logging
+- `--settings-log`: print the resolved configuration before execution
+- `--rpc <url>`
+- `--nexus <name>`
+- `--wif <wif>`
+- `--symbol <symbol>`
+- `--token-type <nft|fungible>`
+- `--token-max-supply <int>`
+- `--fungible-max-supply <int>`
+- `--fungible-decimals <0..255>`
+- `--carbon-token-id <int>`
+- `--phantasma-series-id <int>`
+- `--mint-fungible-to <address>`
+- `--mint-fungible-amount <int>`
+- `--rom <hex>`
+- `--token-schemas <json>`
+- `--token-metadata <json>`
+- `--series-metadata <json>`
+- `--nft-metadata <json>`
+- `--create-token-max-data <int>`
+- `--create-token-series-max-data <int>`
+- `--mint-token-max-data <int>`
+- `--gas-fee-base <int>`
+- `--gas-fee-create-token-base <int>`
+- `--gas-fee-create-token-symbol <int>`
+- `--gas-fee-create-token-series <int>`
+- `--gas-fee-multiplier <int>`
 
-```bash
-TOKEN_SCHEMAS_JSON='{"seriesMetadata":[{"name":"extraSharedSampleField","type":"String"}],"rom":[{"name":"name","type":"String"},{"name":"description","type":"String"},{"name":"imageURL","type":"String"},{"name":"infoURL","type":"String"},{"name":"royalties","type":"Int32"},{"name":"extraSampleField","type":"String"}],"ram":[]}'
-NFT_METADATA_JSON='{"name":"Test NFT Name","description":"Test NFT Description","imageURL":"images-assets.nasa.gov/image/PIA13227/PIA13227~orig.jpg","infoURL":"https://images.nasa.gov/details/PIA13227","royalties":10000000,"extraSampleField":"abc"}'
-
-pha-deploy --mint-nft \
-  --rpc https://testnet.phantasma.info/rpc \
-  --nexus testnet \
-  --wif <WIF> \
-  --carbon-token-id <TOKEN_ID> \
-  --phantasma-series-id <PHANTASMA_SERIES_ID> \
-  --token-schemas "$TOKEN_SCHEMAS_JSON" \
-  --nft-metadata "$NFT_METADATA_JSON" \
-  --mint-token-max-data 100000000 \
-  --gas-fee-base 10000 \
-  --gas-fee-multiplier 10000
-```
-
-## CLI Flags and Overrides
-
-Action selectors (first match wins):
+Required token inputs by action:
 
 - `--create-token`
+  - requires `rpc`, `nexus`, `wif`, `symbol`
+  - NFT path requires `token_schemas`
+  - fungible path requires `token_max_supply` and `fungible_decimals`
 - `--create-series`
-- `--mint-fungible`
+  - requires `carbon_token_id`, `token_schemas`, `series_metadata`
 - `--mint-nft`
+  - requires `carbon_token_id`, `phantasma_series_id`, `token_schemas`, `nft_metadata`
+- `--mint-fungible`
+  - requires `carbon_token_id`, `mint_fungible_amount`
+  - `mint_fungible_to` defaults to the signer address when omitted
 
-Common utility flags:
+`series_metadata` and `nft_metadata` accept either:
+- a JSON object of `name -> value`
+- an array of `{ "name": "...", "value": ... }`
 
-- `--config <path>` – load an alternate TOML file.
-- `--dry-run` – skip broadcasting even if the config has `dry_run = false`.
-- `--rpc-log` – enable verbose SDK JSON-RPC logging (full response payloads).
-- `--settings-log` – print resolved settings before executing an action.
+## Contract Workflow
 
-Configuration overrides (values override `config.toml` when provided):
+### 1. Compile
 
-- `--rpc <url>` – RPC endpoint (fallback: `https://testnet.phantasma.info/rpc`).
-- `--nexus <name>` – chain nexus (example: `mainnet` or `testnet`).
-- `--wif <wif>` – signer WIF.
-- `--symbol <symbol>` – token symbol.
-- `--token-type <nft|fungible>` – token kind (default: `nft`).
-- `--token-max-supply <int>` / `--fungible-max-supply <int>` – max supply (required when token-type is `fungible`).
-- `--fungible-decimals <0..255>` – decimals for fungible token (required when token-type is `fungible`).
-- `--carbon-token-id <int>` – existing carbon token id (for series or mint).
-- `--carbon-token-series-id <int>` – optional carbon series id for read-path correlation.
-- `--phantasma-series-id <int>` – existing Phantasma series id required by deterministic NFT mint.
-- `--mint-fungible-to <address>` – recipient address for fungible mint (default: WIF owner).
-- `--mint-fungible-amount <int>` – amount to mint (integer atomic units).
-- `--rom <hex>` – token ROM as hex string.
-- `--token-schemas '<json>'` – inline JSON for token schemas (`seriesMetadata`, `rom`, `ram`).
-- `--token-metadata '<json>'` – inline JSON for token metadata fields.
-- `--series-metadata '<json>'` – inline JSON object or array of `{ name, value }` pairs.
-- `--nft-metadata '<json>'` – inline JSON object or array of `{ name, value }` pairs for the public per-instance payload; do not include `_i` or nested `rom`.
-- `--create-token-max-data <int>` – payload limit for token creation.
-- `--create-token-series-max-data <int>` – payload limit for series creation.
-- `--mint-token-max-data <int>` – payload limit for minting.
-- `--gas-fee-base <int>` – base gas fee.
-- `--gas-fee-create-token-base <int>` – gas fee for token creation.
-- `--gas-fee-create-token-symbol <int>` – symbol registration fee.
-- `--gas-fee-create-token-series <int>` – fee for series creation.
-- `--gas-fee-multiplier <int>` – multiplier applied to gas fee.
+Compile a `.tomb` source file through the system-installed `pha-tomb`.
 
-Notes:
-- JSON arguments must be passed as single-line quoted strings; for substantial edits, updating `config.toml` is usually more convenient.
-- Unknown flags are ignored by the loader; prefer editing the TOML file for long-lived configuration changes.
+```bash
+pha-deploy contract compile \
+  --source ./contracts/demo.tomb \
+  --out ./dist/contracts/demo \
+  --debug \
+  --protocol 16 \
+  --nativecheck warn
+```
+
+Supported compile flags:
+
+- `--source <path>`: required `.tomb` source file
+- `--out <dir>`: final artifact bundle directory
+- `--contract-name <name>`: required when the compiler emits multiple modules and you need to pick one
+- `--protocol <number>`: passed through to `pha-tomb`
+- `--debug`: request debug artifacts
+- `--nativecheck <off|warn|error>`
+- `--libpath <path>`: repeatable additional library search path
+
+Compile output:
+
+- prints the exact compiler command and cwd
+- prints separated `pha-tomb stdout` / `pha-tomb stderr`
+- materializes an artifact bundle in the selected output directory
+- writes `manifest.json`
+- copies:
+  - `<contract>.pvm`
+  - `<contract>.abi`
+  - optional `<contract>.debug`
+  - optional `<contract>.asm`
+  - optional `<contract>.pvm.hex`
+  - optional `<contract>.abi.hex`
+
+`manifest.json` is the preferred handoff format for later deploy/upgrade commands.
+
+### 2. Deploy
+
+Deploy a compiled contract bundle.
+
+Using the manifest produced by `contract compile`:
+
+```bash
+pha-deploy contract deploy \
+  --rpc https://testnet.phantasma.info/rpc \
+  --nexus testnet \
+  --chain main \
+  --wif <WIF> \
+  --manifest ./dist/contracts/demo/manifest.json \
+  --dry-run
+```
+
+Using explicit artifact paths instead of a manifest:
+
+```bash
+pha-deploy contract deploy \
+  --rpc https://testnet.phantasma.info/rpc \
+  --nexus testnet \
+  --wif <WIF> \
+  --contract-name demo \
+  --script ./dist/contracts/demo/demo.pvm \
+  --abi ./dist/contracts/demo/demo.abi
+```
+
+### 3. Upgrade
+
+Upgrade an already deployed contract using the same artifact inputs:
+
+```bash
+pha-deploy contract upgrade \
+  --rpc https://testnet.phantasma.info/rpc \
+  --nexus testnet \
+  --chain main \
+  --wif <WIF> \
+  --manifest ./dist/contracts/demo/manifest.json \
+  --dry-run
+```
+
+Shared deploy/upgrade flags:
+
+- `--rpc <url>`: required
+- `--nexus <name>`: required
+- `--chain <name>`: optional, defaults to `main`
+- `--wif <wif>`: required
+- `--manifest <path>`: preferred compiled bundle input
+- `--contract-name <name>`: required when using direct `--script` / `--abi`
+- `--script <path>`: compiled `.pvm`
+- `--abi <path>`: compiled `.abi`
+- `--debug <path>`: optional `.debug`
+- `--gas-price <int>`
+- `--gas-limit <int>`
+- `--pow <int>`
+- `--payload-hex <hex>`
+- `--dry-run`
+
+Deploy/upgrade output always includes:
+
+- operation
+- contract name
+- signer address
+- script byte count
+- ABI byte count
+- generated VM script hex
+- signed transaction hex
+
+When `--dry-run` is omitted, the CLI also broadcasts the transaction, waits for the tx result, and prints the tx hash.
+
+## Quick Examples
+
+Create an NFT token from config:
+
+```bash
+pha-deploy --create-token --config ./config.toml
+```
+
+Mint fungible tokens without editing the config file:
+
+```bash
+pha-deploy --mint-fungible \
+  --config ./config.toml \
+  --carbon-token-id 123 \
+  --mint-fungible-amount 100000000
+```
+
+Compile, then deploy from the emitted manifest:
+
+```bash
+pha-deploy contract compile --source ./contracts/demo.tomb
+pha-deploy contract deploy \
+  --rpc https://testnet.phantasma.info/rpc \
+  --nexus testnet \
+  --wif <WIF> \
+  --manifest ./dist/contracts/demo/manifest.json \
+  --dry-run
+```
+
+## Dev Shortcuts
+
+This repo ships a `justfile` with the current documented shortcuts:
+
+- `just build`
+- `just test`
+- `just ct`
+- `just ctf`
+- `just ctd`
+- `just cs`
+- `just csd`
+- `just mn`
+- `just mnd`
+- `just mf`
+- `just mfd`
+
+Run `just --list` to inspect the full local helper set.

@@ -1,7 +1,7 @@
 {
   "name": "pha-deploy",
   "version": "0.3.0",
-  "description": "CLI token deployment and minting tool for Phantasma blockchain",
+  "description": "CLI for Phantasma token and contract lifecycle workflows",
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,7 +28,7 @@
     "start": "node --enable-source-maps dist/cli.js",
     "cli": "npm run build && node dist/cli.js",
     "lint": "eslint \"src/**/*.{ts,js}\" --fix || true",
-    "test": "echo \"No tests configured\" && exit 0",
+    "test": "node --test -r ts-node/register test/**/*.test.ts",
     "prepare": "npm run build"
   },
   "keywords": [
@@ -41,7 +41,7 @@
   "license": "MIT",
   "dependencies": {
     "@iarna/toml": "*",
-    "phantasma-sdk-ts": "^0.5.0",
+    "phantasma-sdk-ts": "^0.5.2",
     "yargs": "*"
   },
   "devDependencies": {
