@@ -12,6 +12,7 @@ import {
   VmStructSchema,
   MetadataField,
 } from "phantasma-sdk-ts";
+import { requireRpcTxHash } from "../rpc/txHash";
 import { waitForTx } from "./waitForTx";
 import { bigintReplacer, formatForLog } from "./helpers";
 
@@ -114,7 +115,10 @@ export async function mintNftToken(
 
   const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
 
-  let txHash = await rpc.sendCarbonTransaction(tx);
+  const txHash = requireRpcTxHash(
+    await rpc.sendCarbonTransaction(tx),
+    "mint-nft transaction",
+  );
   console.log("txHash: ", txHash);
 
   const { success, result } = await waitForTx(rpc, txHash);

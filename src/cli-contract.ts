@@ -177,6 +177,9 @@ async function handleContractBroadcast(
   }
 
   console.log(`  tx hash: ${result.txHash ?? ""}`);
+  if (result.broadcastError) {
+    throw new Error(result.broadcastError);
+  }
   if (!result.success) {
     throw new Error(
       `${operation} transaction failed${result.txHash ? ` (txHash: ${result.txHash})` : ""}`,

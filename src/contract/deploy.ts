@@ -5,6 +5,7 @@ import {
   PhantasmaKeys,
 } from "phantasma-sdk-ts";
 import { waitForTx } from "../actions/waitForTx";
+import { requireRpcTxHash } from "../rpc/txHash";
 
 export type ContractOperation = "deploy" | "upgrade";
 
@@ -38,6 +39,7 @@ export interface ExecuteContractTransactionResult {
   txHash?: string;
   success?: boolean;
   result?: string;
+  broadcastError?: string;
 }
 
 export function prepareContractTransaction(
@@ -113,7 +115,21 @@ export async function executeContractTransaction(
   }
 
   const rpc = new PhantasmaAPI(options.rpc, null, options.nexus);
-  const txHash = await rpc.sendRawTransaction(prepared.txHex);
+  let txHash: string;
+  try {
+    txHash = requireRpcTxHash(
+      await rpc.sendRawTransaction(prepared.txHex),
+      `${options.operation} transaction`,
+    );
+  } catch (err) {
+    return {
+      prepared,
+      dryRun: false,
+      success: false,
+      result: "",
+      broadcastError: err instanceof Error ? err.message : String(err),
+    };
+  }
   const waitResult = await waitForTx(rpc, txHash);
 
   return {

@@ -13,6 +13,7 @@ import {
   TokenSchemas,
 } from "phantasma-sdk-ts";
 import { TokenType } from "../config";
+import { requireRpcTxHash } from "../rpc/txHash";
 import { waitForTx } from "./waitForTx";
 import { bigintReplacer, Metadata, formatForLog } from "./helpers";
 
@@ -150,7 +151,10 @@ export async function createToken(
 
   const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
 
-  let txHash = await rpc.sendCarbonTransaction(tx);
+  const txHash = requireRpcTxHash(
+    await rpc.sendCarbonTransaction(tx),
+    "create-token transaction",
+  );
   console.log("txHash: ", txHash);
 
   const { success, result } = await waitForTx(rpc, txHash);

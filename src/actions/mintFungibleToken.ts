@@ -16,6 +16,7 @@ import {
   TxTypes,
   bytesToHex,
 } from "phantasma-sdk-ts";
+import { requireRpcTxHash } from "../rpc/txHash";
 import { waitForTx } from "./waitForTx";
 import { bigintReplacer, formatForLog } from "./helpers";
 
@@ -111,7 +112,10 @@ export async function mintFungibleToken(
 
   const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
 
-  const txHash = await rpc.sendCarbonTransaction(txHex);
+  const txHash = requireRpcTxHash(
+    await rpc.sendCarbonTransaction(txHex),
+    "mint-fungible transaction",
+  );
   console.log("txHash: ", txHash);
 
   const { success, result } = await waitForTx(rpc, txHash);
@@ -133,4 +137,3 @@ export async function mintFungibleToken(
     console.log("Decode error:", err instanceof Error ? err.message : String(err));
   }
 }
-
