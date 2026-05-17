@@ -18,7 +18,7 @@ Current surface area:
 
 ## Requirements
 
-- Node.js `>=16`
+- Node.js `>=22`
 - `pha-tomb >= 2.1.0` must be available for `contract compile`, either in `PATH` or through `--compiler` / `PHA_TOMB_PATH`
 
 `contract deploy`, `contract upgrade`, and `contract attach` do not invoke the compiler directly. They work from a compiled artifact bundle or explicit `--script` / `--abi` inputs.
@@ -41,7 +41,7 @@ node dist/cli.js --help
 Example version output:
 
 ```text
-pha-deploy 0.5.0
+pha-deploy 0.5.1
 pha-tomb version 2.1.0
 pha-tomb path /usr/local/bin/pha-tomb
 ```
