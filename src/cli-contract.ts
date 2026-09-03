@@ -269,7 +269,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
           .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
           .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
-          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the legacy VM transaction" })
+          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the VM script transaction" })
           .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
           .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
       async (argv) => {
@@ -307,7 +307,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
           .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
           .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
-          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the legacy VM transaction" })
+          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the VM script transaction" })
           .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
           .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
       async (argv) => {
@@ -349,7 +349,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
           .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
           .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
-          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the legacy VM transaction" })
+          .option("pow", { type: "number", describe: "Proof-of-work difficulty for the VM script transaction" })
           .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
           .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
       async (argv) => {
