@@ -69,14 +69,9 @@ Overrides (replace values from config.toml when provided):
   --token-metadata <json>       JSON string of token metadata fields
   --series-metadata <json>      JSON object or array of series metadata fields
   --nft-metadata <json>         JSON object or array of NFT metadata fields
-  --create-token-max-data <int> Max data for create-token tx
-  --create-token-series-max-data <int> Max data for create-series tx
-  --mint-token-max-data <int>   Max data for mint-nft tx
-  --gas-fee-base <int>          Gas fee base
-  --gas-fee-create-token-base <int>   Gas fee base for create-token
-  --gas-fee-create-token-symbol <int> Gas fee per symbol
-  --gas-fee-create-token-series <int> Gas fee for create-series
-  --gas-fee-multiplier <int>    Gas fee multiplier
+
+Fees are not configured: the gas offer and the storage deposit of every token transaction are
+planned from the chain's own prices for that exact transaction, and printed before it is sent.
 
 pha-deploy - Phantasma token deployment and minting CLI
 `;
@@ -102,11 +97,6 @@ async function actionCreateToken(
   requireArg(cfg.nexus, "nexus");
   requireArg(cfg.wif, "wif");
   requireArg(cfg.symbol, "symbol");
-  requireArg(cfg.gasFeeBase, "gas_fee_base");
-  requireArg(cfg.gasFeeCreateTokenBase, "gas_fee_create_token_base");
-  requireArg(cfg.gasFeeCreateTokenSymbol, "gas_fee_create_token_symbol");
-  requireArg(cfg.gasFeeMultiplier, "gas_fee_multiplier");
-  requireArg(cfg.createTokenMaxData, "create_token_max_data");
 
   const tokenType: TokenType =
     (cfg.tokenType ?? "nft") === "fungible" ? "fungible" : "nft";
@@ -124,11 +114,6 @@ async function actionCreateToken(
       cfg.nexus,
       cfg.wif,
       cfg.symbol,
-      cfg.gasFeeBase,
-      cfg.gasFeeCreateTokenBase,
-      cfg.gasFeeCreateTokenSymbol,
-      cfg.gasFeeMultiplier,
-      cfg.createTokenMaxData,
       cfg.tokenSchemas,
       cfg.tokenMetadata,
       tokenType,
@@ -151,10 +136,6 @@ async function actionCreateSeries(
   requireArg(cfg.carbonTokenId, "carbon_token_id");
   requireArg(cfg.tokenSchemas, "token_schemas");
   requireArg(cfg.seriesMetadata, "series_metadata");
-  requireArg(cfg.gasFeeBase, "gas_fee_base");
-  requireArg(cfg.gasFeeCreateTokenSeries, "gas_fee_create_token_series");
-  requireArg(cfg.gasFeeMultiplier, "gas_fee_multiplier");
-  requireArg(cfg.createTokenSeriesMaxData, "create_token_series_max_data");
 
   await createSeries(
     new createSeriesCfg(
@@ -162,10 +143,6 @@ async function actionCreateSeries(
       cfg.nexus,
       cfg.wif,
       cfg.carbonTokenId,
-      cfg.gasFeeBase,
-      cfg.gasFeeCreateTokenSeries,
-      cfg.gasFeeMultiplier,
-      cfg.createTokenSeriesMaxData,
       cfg.tokenSchemas?.seriesMetadata,
       cfg.seriesMetadata
     ),
@@ -186,9 +163,6 @@ async function actionMintNft(
   requireArg(cfg.phantasmaSeriesId, "phantasma_series_id");
   requireArg(cfg.tokenSchemas, "token_schemas");
   requireArg(cfg.nftMetadata, "nft_metadata");
-  requireArg(cfg.gasFeeBase, "gas_fee_base");
-  requireArg(cfg.gasFeeMultiplier, "gas_fee_multiplier");
-  requireArg(cfg.mintTokenMaxData, "mint_token_max_data");
 
   await mintNftToken(
     new mintNftTokenCfg(
@@ -199,9 +173,6 @@ async function actionMintNft(
       cfg.phantasmaSeriesId,
       cfg.tokenSchemas.rom,
       cfg.nftMetadata,
-      cfg.gasFeeBase,
-      cfg.gasFeeMultiplier,
-      cfg.mintTokenMaxData,
     ),
     dryRun,
     logSettings,
@@ -218,9 +189,6 @@ async function actionMintFungible(
   requireArg(cfg.wif, "wif");
   requireArg(cfg.carbonTokenId, "carbon_token_id");
   requireArg(cfg.mintFungibleAmount, "mint_fungible_amount");
-  requireArg(cfg.gasFeeBase, "gas_fee_base");
-  requireArg(cfg.gasFeeMultiplier, "gas_fee_multiplier");
-  requireArg(cfg.mintTokenMaxData, "mint_token_max_data");
 
   const to =
     cfg.mintFungibleTo ?? PhantasmaKeys.fromWIF(cfg.wif).Address.toString();
@@ -233,9 +201,6 @@ async function actionMintFungible(
       cfg.carbonTokenId,
       to,
       cfg.mintFungibleAmount,
-      cfg.gasFeeBase,
-      cfg.gasFeeMultiplier,
-      cfg.mintTokenMaxData,
     ),
     dryRun,
     logSettings,

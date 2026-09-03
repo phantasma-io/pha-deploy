@@ -2,23 +2,14 @@ import {
   Address,
   Bytes32,
   CarbonBinaryReader,
-  CarbonBlob,
-  FeeOptions,
   hexToBytes,
   IntX,
+  NativeTxHelper,
   PhantasmaAPI,
   PhantasmaKeys,
-  SignedTxMsg,
-  SmallString,
-  TxMsg,
-  TxMsgMintFungible,
-  TxMsgSigner,
-  TxTypes,
-  bytesToHex,
 } from "phantasma-sdk-ts";
-import { requireRpcTxHash } from "../rpc/txHash";
-import { waitForTx } from "./waitForTx";
-import { bigintReplacer, formatForLog } from "./helpers";
+import { planAndSubmit } from "./submit";
+import { bigintReplacer } from "./helpers";
 
 export class mintFungibleTokenCfg {
   constructor(
@@ -28,9 +19,6 @@ export class mintFungibleTokenCfg {
     public carbonTokenId: bigint,
     public to: string,
     public amount: bigint,
-    public gasFeeBase: bigint,
-    public gasFeeMultiplier: bigint,
-    public mintTokenMaxData: bigint,
   ) {
     this.rpc = rpc;
     this.nexus = nexus;
@@ -38,9 +26,6 @@ export class mintFungibleTokenCfg {
     this.carbonTokenId = carbonTokenId;
     this.to = to;
     this.amount = amount;
-    this.gasFeeBase = gasFeeBase;
-    this.gasFeeMultiplier = gasFeeMultiplier;
-    this.mintTokenMaxData = mintTokenMaxData;
   }
 
   toPrintable() {
@@ -77,62 +62,33 @@ export async function mintFungibleToken(
     );
   }
 
-  // There is no dedicated MintFungible TxHelper in `phantasma-sdk-ts` yet, so we build the
-  // Carbon TxMsg manually using the SDK core types. TokenContract::MintFungible returns the
-  // receiver's new balance after minting, encoded as IntX in the tx result.
-  const feeOptions = new FeeOptions(cfg.gasFeeBase, cfg.gasFeeMultiplier);
-  const maxGas = feeOptions.calculateMaxGas();
+  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
+  const tx = NativeTxHelper.mintFungible({
+    owner: senderPubKey,
+    to: receiverPubKey,
+    tokenId: cfg.carbonTokenId,
+    amount: IntX.fromBigInt(cfg.amount),
+  });
 
-  const msg = new TxMsg();
-  msg.type = TxTypes.MintFungible;
-  msg.expiry = BigInt(Date.now() + 60_000); // 60s from now (same pattern as other tx helpers)
-  msg.maxGas = maxGas;
-  msg.maxData = cfg.mintTokenMaxData;
-  msg.gasFrom = senderPubKey;
-  msg.payload = SmallString.empty;
-
-  const mint = new TxMsgMintFungible();
-  mint.tokenId = cfg.carbonTokenId;
-  mint.to = receiverPubKey;
-  mint.amount = IntX.fromBigInt(cfg.amount);
-  msg.msg = mint;
-
-  const txBytes = TxMsgSigner.signAndSerialize(msg, txSender);
-  const txHex = bytesToHex(txBytes);
-
-  if (dryRun) {
-    console.log(`[dry-run] Prepared tx (not sent): ${txHex}`);
-    console.log(
-      formatForLog(CarbonBlob.NewFromBytes(SignedTxMsg, hexToBytes(txHex), 0)),
-    );
+  const settled = await planAndSubmit({ rpc, signer: txSender, msg: tx, dryRun });
+  if (settled === null) {
     return;
   }
 
-  console.log("Broadcasting transaction...");
-
-  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
-
-  const txHash = requireRpcTxHash(
-    await rpc.sendCarbonTransaction(txHex),
-    "mint-fungible transaction",
-  );
-  console.log("txHash: ", txHash);
-
-  const { success, result } = await waitForTx(rpc, txHash);
-
-  if (!success) {
+  if (!settled.success) {
     console.log("Could not mint fungible tokens");
     return;
   }
 
+  // TokenContract::MintFungible answers with the receiver's balance after the mint, encoded as IntX.
   try {
-    const r = new CarbonBinaryReader(hexToBytes(result));
+    const r = new CarbonBinaryReader(hexToBytes(settled.result));
     const newBalance = IntX.read(r).toBigInt();
     console.log("New balance after mint:", newBalance.toString());
   } catch (err) {
     console.log(
       "Mint succeeded but could not decode result as IntX; raw result:",
-      result,
+      settled.result,
     );
     console.log("Decode error:", err instanceof Error ? err.message : String(err));
   }

@@ -115,14 +115,6 @@ nft_metadata="""
 }
 """
 
-# Data size limits (numeric)
-create_token_max_data = 1000000000
-create_token_series_max_data = 100000000
-mint_token_max_data = 100000000
-
-# Gas / fee configuration (numeric values)
-gas_fee_base = 10000
-gas_fee_create_token_base = 10000000000
-gas_fee_create_token_symbol = 10000000000
-gas_fee_create_token_series = 2500000000
-gas_fee_multiplier = 10000
+# Fees are not configured here. Under gas model v2 the chain prices each transaction from its own
+# gas config - the gas offer and the refundable storage deposit are planned from the message itself
+# and printed before it is sent.

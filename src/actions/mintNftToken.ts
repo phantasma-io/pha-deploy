@@ -1,20 +1,18 @@
 import {
   Bytes32,
-  CarbonBlob,
   hexToBytes,
-  MintNftFeeOptions,
+  IntX,
   MintPhantasmaNonFungibleTxHelper,
   PhantasmaAPI,
+  PhantasmaNftMintInfo,
   PhantasmaNftRomBuilder,
   PhantasmaKeys,
-  SignedTxMsg,
   TokenHelper,
   VmStructSchema,
   MetadataField,
 } from "phantasma-sdk-ts";
-import { requireRpcTxHash } from "../rpc/txHash";
-import { waitForTx } from "./waitForTx";
-import { bigintReplacer, formatForLog } from "./helpers";
+import { planAndSubmit } from "./submit";
+import { bigintReplacer } from "./helpers";
 
 function bytes32HexToRpcDecimal(hex: string): string {
   if (hex.length === 0) {
@@ -39,9 +37,6 @@ export class mintNftTokenCfg {
     public phantasmaSeriesId: bigint,
     public nftRomSchema: VmStructSchema,
     public nftMetadata: MetadataField[],
-    public gasFeeBase: bigint,
-    public gasFeeMultiplier: bigint,
-    public mintTokenMaxData: bigint,
   ) {
     this.rpc = rpc;
     this.nexus = nexus;
@@ -50,9 +45,6 @@ export class mintNftTokenCfg {
     this.phantasmaSeriesId = phantasmaSeriesId;
     this.nftRomSchema = nftRomSchema;
     this.nftMetadata = nftMetadata;
-    this.gasFeeBase = gasFeeBase;
-    this.gasFeeMultiplier = gasFeeMultiplier;
-    this.mintTokenMaxData = mintTokenMaxData;
   }
 
   toPrintable() {
@@ -89,42 +81,29 @@ export async function mintNftToken(
     cfg.nftMetadata
   );
 
-  const feeOptions = new MintNftFeeOptions(
-    cfg.gasFeeBase,
-    cfg.gasFeeMultiplier,
-  );
+  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
+  // One instance, minted to the signer. The mint call accepts a list, so the fee the planner reads
+  // out of it follows the instances and their ROM sizes rather than any number this CLI supplies.
+  const tx = MintPhantasmaNonFungibleTxHelper.buildTx({
+    tokenId: cfg.carbonTokenId,
+    sender: senderPubKey,
+    to: senderPubKey,
+    tokens: [
+      new PhantasmaNftMintInfo({
+        phantasmaSeriesId: IntX.fromBigInt(cfg.phantasmaSeriesId),
+        rom,
+        ram: new Uint8Array(),
+      }),
+    ],
+  });
 
-  const tx = MintPhantasmaNonFungibleTxHelper.buildTxAndSignHex(
-    cfg.carbonTokenId,
-    cfg.phantasmaSeriesId,
-    txSender,
-    senderPubKey,
-    rom,
-    new Uint8Array(),
-    feeOptions,
-    cfg.mintTokenMaxData,
-  );
-
-  if (dryRun) {
-    console.log(`[dry-run] Prepared tx (not sent): ${tx}`);
-    console.log(formatForLog(CarbonBlob.NewFromBytes(SignedTxMsg, hexToBytes(tx), 0)));
+  const settled = await planAndSubmit({ rpc, signer: txSender, msg: tx, dryRun });
+  if (settled === null) {
     return;
   }
 
-  console.log("Broadcasting transaction...");
-
-  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
-
-  const txHash = requireRpcTxHash(
-    await rpc.sendCarbonTransaction(tx),
-    "mint-nft transaction",
-  );
-  console.log("txHash: ", txHash);
-
-  const { success, result } = await waitForTx(rpc, txHash);
-
-  if (success) {
-    const mintResults = MintPhantasmaNonFungibleTxHelper.parseResult(result);
+  if (settled.success) {
+    const mintResults = MintPhantasmaNonFungibleTxHelper.parseResult(settled.result);
     if (mintResults.length === 0) {
       throw new Error("Deterministic mint result is empty");
     }

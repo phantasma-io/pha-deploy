@@ -1,20 +1,15 @@
 import {
   Bytes32,
-  CarbonBlob,
-  CreateSeriesFeeOptions,
   CreateTokenSeriesTxHelper,
   MetadataField,
   PhantasmaAPI,
   PhantasmaKeys,
   SeriesInfoBuilder,
-  SignedTxMsg,
   VmStructSchema,
   getRandomPhantasmaId,
-  hexToBytes,
 } from "phantasma-sdk-ts";
-import { requireRpcTxHash } from "../rpc/txHash";
-import { waitForTx } from "./waitForTx";
-import { bigintReplacer, Metadata, formatForLog } from "./helpers";
+import { planAndSubmit } from "./submit";
+import { bigintReplacer } from "./helpers";
 
 export class createSeriesCfg {
   constructor(
@@ -22,10 +17,6 @@ export class createSeriesCfg {
     public nexus: string,
     public wif: string,
     public carbonTokenId: bigint,
-    public gasFeeBase: bigint,
-    public gasFeeCreateTokenSeries: bigint,
-    public gasFeeMultiplier: bigint,
-    public createSeriesMaxData: bigint,
     public seriesSchema: VmStructSchema,
     public seriesMetadata: MetadataField[]
   ) {
@@ -33,10 +24,6 @@ export class createSeriesCfg {
     this.nexus = nexus;
     this.wif = wif;
     this.carbonTokenId = carbonTokenId;
-    this.gasFeeBase = gasFeeBase;
-    this.gasFeeCreateTokenSeries = gasFeeCreateTokenSeries;
-    this.gasFeeMultiplier = gasFeeMultiplier;
-    this.createSeriesMaxData = createSeriesMaxData;
     this.seriesSchema = seriesSchema;
     this.seriesMetadata = seriesMetadata;
   }
@@ -82,40 +69,16 @@ export async function createSeries(
     cfg.seriesMetadata
   );
 
-  const feeOptions = new CreateSeriesFeeOptions(
-    cfg.gasFeeBase,
-    cfg.gasFeeCreateTokenSeries,
-    cfg.gasFeeMultiplier,
-  );
+  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
+  const tx = CreateTokenSeriesTxHelper.buildTx(cfg.carbonTokenId, info, senderPubKey);
 
-  const tx = CreateTokenSeriesTxHelper.buildTxAndSignHex(
-    cfg.carbonTokenId,
-    info,
-    txSender,
-    feeOptions,
-    cfg.createSeriesMaxData,
-  );
-
-  if (dryRun) {
-    console.log(`[dry-run] Prepared tx (not sent): ${tx}`);
-    console.log(formatForLog(CarbonBlob.NewFromBytes(SignedTxMsg, hexToBytes(tx), 0)));
+  const settled = await planAndSubmit({ rpc, signer: txSender, msg: tx, dryRun });
+  if (settled === null) {
     return;
   }
 
-  console.log("Broadcasting transaction...");
-
-  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
-
-  const txHash = requireRpcTxHash(
-    await rpc.sendCarbonTransaction(tx),
-    "create-series transaction",
-  );
-  console.log("txHash: ", txHash);
-
-  const { success, result } = await waitForTx(rpc, txHash);
-
-  if (success) {
-    var seriesId = CreateTokenSeriesTxHelper.parseResult(result);
+  if (settled.success) {
+    const seriesId = CreateTokenSeriesTxHelper.parseResult(settled.result);
     console.log(
       `Deployed series with phantasma ID ${newPhantasmaSeriesId.toString()} and carbon series ID ${seriesId}`,
     );

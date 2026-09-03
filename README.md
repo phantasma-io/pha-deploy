@@ -14,7 +14,8 @@ Current surface area:
   - `contract upgrade`
   - `contract attach`
 - `--version` prints both the `pha-deploy` version and the resolved `pha-tomb` version/path.
-- Dry-run mode is available for token and contract transactions.
+- Dry-run mode is available for token and contract transactions. A token dry-run reads the chain's
+  gas config to plan the fee, prints the plan and the signed envelope, and broadcasts nothing.
 
 ## Requirements
 
@@ -90,14 +91,6 @@ Common token flags:
 - `--token-metadata <json>`
 - `--series-metadata <json>`
 - `--nft-metadata <json>`
-- `--create-token-max-data <int>`
-- `--create-token-series-max-data <int>`
-- `--mint-token-max-data <int>`
-- `--gas-fee-base <int>`
-- `--gas-fee-create-token-base <int>`
-- `--gas-fee-create-token-symbol <int>`
-- `--gas-fee-create-token-series <int>`
-- `--gas-fee-multiplier <int>`
 
 Required token inputs by action:
 
@@ -116,6 +109,36 @@ Required token inputs by action:
 `series_metadata` and `nft_metadata` accept either:
 - a JSON object of `name -> value`
 - an array of `{ "name": "...", "value": ... }`
+
+### Fees
+
+There is nothing to configure. Every token transaction is priced by the chain: the CLI builds the
+message, asks the node for its gas config, and plans the gas offer and the storage deposit from that
+exact message. Both are printed before the transaction is sent, and the gas the chain actually
+billed is printed after it settles:
+
+```text
+Fee plan: CreateToken, envelope <bytes> bytes
+  gas bill        <amount> KCAL (<atoms> atoms)
+  gas offer       <amount> KCAL (<atoms> atoms)
+  storage deposit <amount> SOUL (<atoms> atoms, <quanta> quanta, refunded when the rows are deleted)
+...
+Gas billed: <amount> KCAL (<atoms> atoms) - exactly as planned
+```
+
+The amounts depend on the network and on the message. Every one of them comes from the gas config
+of the node the CLI is pointed at.
+
+The plan is exact where the chain prices an operation from the message alone, and an upper bound
+where the price also depends on chain state the message does not carry - whether the recipient
+already holds the token, whether the supply row exists, which mode a series mints in. Those are
+taken at the reading that costs more, so a mint typically settles slightly below its plan; the
+difference is refunded, as is the storage deposit once the rows it paid for are deleted.
+
+`--create-token` runs one lookup before it signs: `Token.CreateToken` is charged its policy fee
+before the contract checks the symbol, so a symbol that is already taken would cost that fee for
+nothing. The CLI refuses to send when the chain says the symbol is taken, and also when the lookup
+could not establish an answer.
 
 ## Contract Workflow
 

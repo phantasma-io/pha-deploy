@@ -35,18 +35,6 @@ export interface Config {
   mintFungibleTo?: string | null;
   mintFungibleAmount?: bigint | null;
 
-  // Limits / sizes
-  createTokenMaxData?: bigint | null;
-  createTokenSeriesMaxData?: bigint | null;
-  mintTokenMaxData?: bigint | null;
-
-  // Gas / fees
-  gasFeeBase?: bigint | null;
-  gasFeeCreateTokenBase?: bigint | null;
-  gasFeeCreateTokenSymbol?: bigint | null;
-  gasFeeCreateTokenSeries?: bigint | null;
-  gasFeeMultiplier?: bigint | null;
-
   // Runtime flags
   configPath?: string | null;
   dryRun?: boolean;
@@ -257,14 +245,6 @@ export function loadConfig(options?: {
     nftMetadata: null,
     mintFungibleTo: null,
     mintFungibleAmount: null,
-    createTokenMaxData: null,
-    createTokenSeriesMaxData: null,
-    mintTokenMaxData: null,
-    gasFeeBase: null,
-    gasFeeCreateTokenBase: null,
-    gasFeeCreateTokenSymbol: null,
-    gasFeeCreateTokenSeries: null,
-    gasFeeMultiplier: null,
     configPath: null,
     dryRun: false,
   };
@@ -385,70 +365,6 @@ export function loadConfig(options?: {
     "nft_metadata",
   );
   cfg.nftMetadata = parseMetadataFieldArray(nmfRaw, "nft_metadata") ?? null;
-
-  // Limits and sizes
-  cfg.createTokenMaxData =
-    parseBigInt(
-      pickValue(argv, "create-token-max-data", "create_token_max_data") as
-        | string
-        | bigint
-        | undefined,
-    ) ?? null;
-  cfg.createTokenSeriesMaxData =
-    parseBigInt(
-      pickValue(
-        argv,
-        "create-token-series-max-data",
-        "create_token_series_max_data",
-      ) as string | bigint | undefined,
-    ) ?? null;
-  cfg.mintTokenMaxData =
-    parseBigInt(
-      pickValue(argv, "mint-token-max-data", "mint_token_max_data") as
-        | string
-        | bigint
-        | undefined,
-    ) ?? null;
-
-  // Gas / fees
-  cfg.gasFeeBase =
-    parseBigInt(
-      pickValue(argv, "gas-fee-base", "gas_fee_base") as
-        | string
-        | bigint
-        | undefined,
-    ) ?? null;
-  cfg.gasFeeCreateTokenBase =
-    parseBigInt(
-      pickValue(
-        argv,
-        "gas-fee-create-token-base",
-        "gas_fee_create_token_base",
-      ) as string | bigint | undefined,
-    ) ?? null;
-  cfg.gasFeeCreateTokenSymbol =
-    parseBigInt(
-      pickValue(
-        argv,
-        "gas-fee-create-token-symbol",
-        "gas_fee_create_token_symbol",
-      ) as string | bigint | undefined,
-    ) ?? null;
-  cfg.gasFeeCreateTokenSeries =
-    parseBigInt(
-      pickValue(
-        argv,
-        "gas-fee-create-token-series",
-        "gas_fee_create_token_series",
-      ) as string | bigint | undefined,
-    ) ?? null;
-  cfg.gasFeeMultiplier =
-    parseBigInt(
-      pickValue(argv, "gas-fee-multiplier", "gas_fee_multiplier") as
-        | string
-        | bigint
-        | undefined,
-    ) ?? null;
 
   // Runtime flags
   cfg.configPath =

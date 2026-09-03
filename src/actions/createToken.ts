@@ -1,11 +1,7 @@
 import {
   Bytes32,
-  CarbonBlob,
-  CreateTokenFeeOptions,
   CreateTokenTxHelper,
-  hexToBytes,
   IntX,
-  SignedTxMsg,
   PhantasmaAPI,
   PhantasmaKeys,
   TokenInfoBuilder,
@@ -13,9 +9,8 @@ import {
   TokenSchemas,
 } from "phantasma-sdk-ts";
 import { TokenType } from "../config";
-import { requireRpcTxHash } from "../rpc/txHash";
-import { waitForTx } from "./waitForTx";
-import { bigintReplacer, Metadata, formatForLog } from "./helpers";
+import { planAndSubmit } from "./submit";
+import { bigintReplacer, Metadata } from "./helpers";
 
 export class createTokenCfg {
   constructor(
@@ -23,11 +18,6 @@ export class createTokenCfg {
     public nexus: string,
     public wif: string,
     public symbol: string,
-    public gasFeeBase: bigint,
-    public gasFeeCreateTokenBase: bigint,
-    public gasFeeCreateTokenSymbol: bigint,
-    public gasFeeMultiplier: bigint,
-    public createTokenMaxData: bigint,
     public tokenSchemas: TokenSchemas | null | undefined,
     public tokenMetadataFields: Metadata,
     public tokenType: TokenType,
@@ -38,11 +28,6 @@ export class createTokenCfg {
     this.nexus = nexus;
     this.wif = wif;
     this.symbol = symbol;
-    this.gasFeeBase = gasFeeBase;
-    this.gasFeeCreateTokenBase = gasFeeCreateTokenBase;
-    this.gasFeeCreateTokenSymbol = gasFeeCreateTokenSymbol;
-    this.gasFeeMultiplier = gasFeeMultiplier;
-    this.createTokenMaxData = createTokenMaxData;
     this.tokenSchemas = tokenSchemas;
     this.tokenMetadataFields = tokenMetadataFields;
     this.tokenType = tokenType;
@@ -127,41 +112,19 @@ export async function createToken(
     cfg.tokenSchemas
   );
 
-  const feeOptions = new CreateTokenFeeOptions(
-    cfg.gasFeeBase,
-    cfg.gasFeeCreateTokenBase,
-    cfg.gasFeeCreateTokenSymbol,
-    cfg.gasFeeMultiplier,
-  );
+  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
+  const tx = CreateTokenTxHelper.buildTx(info, senderPubKey);
 
-  const tx = CreateTokenTxHelper.buildTxAndSignHex(
-    info,
-    txSender,
-    feeOptions,
-    cfg.createTokenMaxData,
-  );
-
-  if (dryRun) {
-    console.log(`[dry-run] Prepared tx (not sent): ${tx}`);
-    console.log(formatForLog(CarbonBlob.NewFromBytes(SignedTxMsg, hexToBytes(tx), 0)));
+  const settled = await planAndSubmit({ rpc, signer: txSender, msg: tx, dryRun });
+  if (settled === null) {
     return;
   }
 
-  console.log("Broadcasting transaction...");
-
-  const rpc = new PhantasmaAPI(cfg.rpc, null, cfg.nexus);
-
-  const txHash = requireRpcTxHash(
-    await rpc.sendCarbonTransaction(tx),
-    "create-token transaction",
-  );
-  console.log("txHash: ", txHash);
-
-  const { success, result } = await waitForTx(rpc, txHash);
-
-  if (success) {
-    var tokenId = CreateTokenTxHelper.parseResult(result);
-    console.log("Deployed carbon token ID:", tokenId);
+  if (settled.success) {
+    // The id is a 64-bit value, so the SDK returns a bigint. It is printed through `toString`,
+    // because `console.log` renders a bigint with JavaScript's `n` suffix.
+    const tokenId = CreateTokenTxHelper.parseResult(settled.result);
+    console.log("Deployed carbon token ID:", tokenId.toString());
   } else {
     console.log("Could not deploy token");
   }

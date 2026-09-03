@@ -4,17 +4,36 @@ import {
   TransactionData,
 } from "phantasma-sdk-ts";
 
+export interface SettledTx {
+  success: boolean;
+  result: string;
+  /**
+   * Gas the chain actually billed, in atoms of the gas token. An aborted transaction is billed
+   * too, so this is read whenever the node answered with a final state; it stays 0 when the state
+   * could not be established at all.
+   */
+  fee: bigint;
+}
+
+function billedFee(txInfo: TransactionData): bigint {
+  // The node reports the fee as a decimal string of atoms; a missing or malformed value is
+  // reported as zero rather than crashing a transaction that already settled.
+  try {
+    return BigInt(txInfo.fee ?? 0);
+  } catch {
+    return 0n;
+  }
+}
+
 export async function waitForTx(
   rpc: PhantasmaAPI,
   txHash: string,
-): Promise<{
-  success: boolean;
-  result: string;
-}> {
+): Promise<SettledTx> {
   const start = Date.now();
   const timeoutMs = 30_000; // 30 seconds total
   const intervalMs = 2_000; // poll every 2 seconds
   let verified = false;
+  let fee = 0n;
 
   const runningName = ExecutionState[ExecutionState.Running];
   const breakName = ExecutionState[ExecutionState.Break];
@@ -41,11 +60,12 @@ export async function waitForTx(
           `Transaction failed: ${stateStr} result: '${txInfo.result}' debugComment: '${txInfo.debugComment}'`,
         );
         verified = true;
+        fee = billedFee(txInfo);
         break;
       } else if (stateStr === haltName) {
         // Halt -> success
         console.log("Transaction succeeded");
-        return { success: true, result: txInfo.result };
+        return { success: true, result: txInfo.result, fee: billedFee(txInfo) };
       } else {
         // Unknown state name -> log and continue polling
         console.log("Unknown ExecutionState value:", stateStr);
@@ -70,5 +90,5 @@ export async function waitForTx(
     );
   }
 
-  return { success: false, result: "" };
+  return { success: false, result: "", fee };
 }
