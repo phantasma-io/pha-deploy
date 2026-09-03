@@ -12,6 +12,23 @@ import { requireRpcTxHash } from "../rpc/txHash";
 
 export type ContractOperation = "deploy" | "upgrade" | "attach";
 
+/**
+ * Gas units the contract lifecycle allows itself when the caller names no `--gas-limit`.
+ *
+ * `AllowGas` escrows `gasPrice * gasLimit` and refunds what the script does not spend, so this
+ * value is a ceiling, and whatever the script does not spend comes back. It has to be large enough
+ * for a real deployment on any network. The cost comes mostly from the DeployContract interop, and
+ * the size of the script moves it very little. The SDK's own `DefaultGasLimit` is 100,000 units,
+ * which does not clear a deployment.
+ *
+ * A constant does not follow the chain. Governance can raise the price of the DeployContract
+ * interop, and this ceiling then stops covering a deployment. A transaction that runs out of gas
+ * is still billed its whole allowance, so each failed attempt costs `gasPrice * gasLimit`. The
+ * chain names that case in its debug comment, as `gasLimit [interop=Runtime.DeployContract ...]`.
+ * Raise `--gas-limit` when it appears.
+ */
+export const DEFAULT_LIFECYCLE_GAS_LIMIT = 3_000_000;
+
 export interface PreparedContractTransaction {
   operation: ContractOperation;
   contractName: string;
@@ -76,26 +93,16 @@ function buildAttachScript(
   bundle: ContractArtifactBundle,
   fromAddress: string,
   attachSymbol: string,
-  gasPrice?: number,
-  gasLimit?: number,
+  gasPrice: number,
+  gasLimit: number,
 ): string {
   // Attach must go through Nexus interop because it binds an already-created native token to a VM
   // bundle. Runtime.DeployContract/UpgradeContract target a different lifecycle.
-  const resolvedGasPrice = normalizeLifecycleGas(
-    gasPrice,
-    ContractTxHelper.DefaultGasPrice,
-    "gasPrice",
-  );
-  const resolvedGasLimit = normalizeLifecycleGas(
-    gasLimit,
-    ContractTxHelper.DefaultGasLimit,
-    "gasLimit",
-  );
   const nullAddress = new ScriptBuilder().NullAddress;
 
   return new ScriptBuilder()
     .BeginScript()
-    .AllowGas(fromAddress, nullAddress, resolvedGasPrice, resolvedGasLimit)
+    .AllowGas(fromAddress, nullAddress, gasPrice, gasLimit)
     .CallInterop("Nexus.AttachTokenContract", [
       fromAddress,
       attachSymbol,
@@ -141,6 +148,18 @@ export function prepareContractTransaction(
 ): PreparedContractTransaction {
   const keys = PhantasmaKeys.fromWIF(options.wif);
   const fromAddress = keys.Address.Text;
+  // Resolved here rather than left to the SDK: its default allowance does not clear a deployment
+  // (see DEFAULT_LIFECYCLE_GAS_LIMIT).
+  const gasLimit = normalizeLifecycleGas(
+    options.gasLimit,
+    DEFAULT_LIFECYCLE_GAS_LIMIT,
+    "gasLimit",
+  );
+  const gasPrice = normalizeLifecycleGas(
+    options.gasPrice,
+    ContractTxHelper.DefaultGasPrice,
+    "gasPrice",
+  );
   const attachSymbol =
     options.operation === "attach"
       ? normalizeAttachSymbol(options.attachSymbol, options.bundle)
@@ -148,25 +167,19 @@ export function prepareContractTransaction(
 
   const scriptHex =
     options.operation === "attach"
-      ? buildAttachScript(
-          options.bundle,
-          fromAddress,
-          attachSymbol as string,
-          options.gasPrice,
-          options.gasLimit,
-        )
+      ? buildAttachScript(options.bundle, fromAddress, attachSymbol as string, gasPrice, gasLimit)
       : options.operation === "deploy"
       ? ContractTxHelper.buildDeployScriptFromBundle(
           options.bundle,
           fromAddress,
-          options.gasPrice,
-          options.gasLimit,
+          gasPrice,
+          gasLimit,
         )
       : ContractTxHelper.buildUpgradeScriptFromBundle(
           options.bundle,
           fromAddress,
-          options.gasPrice,
-          options.gasLimit,
+          gasPrice,
+          gasLimit,
         );
 
   const txHex =
@@ -181,8 +194,8 @@ export function prepareContractTransaction(
             contractName: options.bundle.contractName,
             script: options.bundle.script,
             abi: options.bundle.abi,
-            gasPrice: options.gasPrice,
-            gasLimit: options.gasLimit,
+            gasPrice,
+            gasLimit,
             proofOfWork: options.proofOfWork,
             payloadHex: options.payloadHex,
           })
@@ -194,8 +207,8 @@ export function prepareContractTransaction(
             contractName: options.bundle.contractName,
             script: options.bundle.script,
             abi: options.bundle.abi,
-            gasPrice: options.gasPrice,
-            gasLimit: options.gasLimit,
+            gasPrice,
+            gasLimit,
             proofOfWork: options.proofOfWork,
             payloadHex: options.payloadHex,
           });

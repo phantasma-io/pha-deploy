@@ -255,8 +255,10 @@ Shared deploy/upgrade/attach flags:
 - `--script <path>`: compiled `.pvm`
 - `--abi <path>`: compiled `.abi`
 - `--debug <path>`: optional `.debug`
-- `--gas-price <int>`
-- `--gas-limit <int>`
+- `--gas-price <int>`: gas price for `AllowGas`, default `100000`
+- `--gas-limit <int>`: gas units allowed for `AllowGas`, default `3000000`. `AllowGas` escrows
+  `gas-price * gas-limit` and refunds what the script does not spend, so this is a ceiling, and it
+  is set above what a deployment needs.
 - `--pow <int>`
 - `--payload-hex <hex>`
 - `--dry-run`
