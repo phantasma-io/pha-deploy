@@ -84,7 +84,10 @@ function printFeePlan(plan: FeePlan): void {
   console.log(
     [
       `Fee plan: ${plan.kinds.join(", ")}, envelope ${plan.envelopeBytes} bytes`,
-      `  gas bill        ${shown.gasBill} KCAL (${plan.expectedGasBill} atoms)`,
+      // `exact` is true when the plan predicts the bill. It is false when the plan is an upper
+      // bound, and the settlement can then come out below it. The printed line says which of the
+      // two this number is.
+      `  gas bill        ${plan.exact ? "" : "up to "}${shown.gasBill} KCAL (${plan.expectedGasBill} atoms)`,
       `  gas offer       ${shown.gasOffer} KCAL (${plan.maxGas} atoms)`,
       `  storage deposit ${shown.storageCeiling} SOUL (${plan.maxData} atoms, ` +
         `${plan.newStorageQuanta} quanta, refunded when the rows are deleted)`,
