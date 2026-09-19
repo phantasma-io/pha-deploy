@@ -27,7 +27,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/cli.ts",
     "start": "node --enable-source-maps dist/cli.js",
     "cli": "npm run build && node dist/cli.js",
-    "lint": "eslint \"src/**/*.{ts,js}\" --fix || true",
+    "lint": "eslint .",
     "test": "node --test -r ts-node/register test/**/*.test.ts",
     "prepare": "npm run build"
   },

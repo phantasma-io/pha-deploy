@@ -25,7 +25,7 @@ update-prod:
 
 [group('manage')]
 check:
-    npx eslint . --ext .ts
+    npm run lint
 
 [group('build')]
 clean:
