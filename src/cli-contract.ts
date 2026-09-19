@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import yargs from "yargs/yargs";
+import { DomainSettings, formatUnits, parseUnits } from "phantasma-sdk-ts";
 import {
   CONTRACT_COMPILER_NAME,
   MIN_SUPPORTED_PHA_TOMB_VERSION,
@@ -50,6 +51,31 @@ function parseOptionalInteger(value: unknown, flagName: string): number | undefi
     throw new Error(`${flagName} must be a positive integer`);
   }
   return parsed;
+}
+
+/**
+ * Reads `--max-gas`, a ceiling written in KCAL, into gas-token atoms.
+ *
+ * The chain compares its bill against this one number. It is a ceiling and never a price: the
+ * chain refunds what the script does not spend, and it takes the whole ceiling when the script
+ * aborts.
+ */
+function parseOptionalMaxGas(value: unknown): bigint | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  let atoms: bigint;
+  try {
+    atoms = parseUnits(String(value), DomainSettings.FuelTokenDecimals);
+  } catch {
+    throw new Error(
+      `--max-gas must be an amount in ${DomainSettings.FuelTokenSymbol}, for example 12000`,
+    );
+  }
+  if (atoms <= 0n) {
+    throw new Error(`--max-gas must be greater than zero`);
+  }
+  return atoms;
 }
 
 async function handleContractCompile(argv: {
@@ -138,8 +164,7 @@ async function handleContractBroadcast(
     script?: string;
     abi?: string;
     debug?: string;
-    gasPrice?: unknown;
-    gasLimit?: unknown;
+    maxGas?: unknown;
     pow?: unknown;
     payloadHex?: string;
     dryRun?: boolean;
@@ -161,13 +186,36 @@ async function handleContractBroadcast(
     chain: argv.chain,
     wif: argv.wif,
     bundle: artifacts.bundle,
-    gasPrice: parseOptionalInteger(argv.gasPrice, "--gas-price"),
-    gasLimit: parseOptionalInteger(argv.gasLimit, "--gas-limit"),
+    maxGas: parseOptionalMaxGas(argv.maxGas),
     proofOfWork: parseOptionalInteger(argv.pow, "--pow"),
     payloadHex: argv.payloadHex,
     dryRun: argv.dryRun,
     attachSymbol: argv.symbol,
   });
+
+  const fuel = DomainSettings.FuelTokenSymbol;
+  const kcal = (atoms: bigint) =>
+    `${formatUnits(atoms, DomainSettings.FuelTokenDecimals)} ${fuel}`;
+
+  // The same words the token commands use for the same things, so one CLI speaks one language.
+  if (result.estimate) {
+    console.log("Gas, from the chain's estimate:");
+    console.log(
+      `  gas bill        ${kcal(result.estimate.expectedBill)} (${result.estimate.expectedBill} atoms)`,
+    );
+    console.log(
+      `  gas offer       up to ${kcal(result.prepared.gasCeiling)} (${result.prepared.gasCeiling} atoms)`,
+    );
+    // A VM script cannot declare a storage ceiling, so the escrow is reported and never capped.
+    console.log(
+      `  storage         ${result.estimate.dataRows} rows, ${result.estimate.dataEscrow} atoms escrowed`,
+    );
+  } else {
+    console.log("Gas, set by hand:");
+    console.log(
+      `  gas offer       up to ${kcal(result.prepared.gasCeiling)} (${result.prepared.gasCeiling} atoms), from --max-gas`,
+    );
+  }
 
   console.log("Transaction:");
   console.log(`  operation: ${result.prepared.operation}`);
@@ -267,8 +315,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           .option("script", { type: "string", describe: "Path to compiled .pvm file when not using --manifest" })
           .option("abi", { type: "string", describe: "Path to compiled .abi file when not using --manifest" })
           .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
-          .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
-          .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
+          .option("max-gas", { type: "string", describe: "Gas ceiling in KCAL. Left out, it is read from the chain's estimate" })
           .option("pow", { type: "number", describe: "Proof-of-work difficulty for the VM script transaction" })
           .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
           .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
@@ -283,8 +330,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           script: argv.script,
           abi: argv.abi,
           debug: argv.debug,
-          gasPrice: argv["gas-price"],
-          gasLimit: argv["gas-limit"],
+          maxGas: argv["max-gas"],
           pow: argv.pow,
           payloadHex: argv["payload-hex"],
           dryRun: argv["dry-run"],
@@ -305,8 +351,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           .option("script", { type: "string", describe: "Path to compiled .pvm file when not using --manifest" })
           .option("abi", { type: "string", describe: "Path to compiled .abi file when not using --manifest" })
           .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
-          .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
-          .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
+          .option("max-gas", { type: "string", describe: "Gas ceiling in KCAL. Left out, it is read from the chain's estimate" })
           .option("pow", { type: "number", describe: "Proof-of-work difficulty for the VM script transaction" })
           .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
           .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
@@ -321,8 +366,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           script: argv.script,
           abi: argv.abi,
           debug: argv.debug,
-          gasPrice: argv["gas-price"],
-          gasLimit: argv["gas-limit"],
+          maxGas: argv["max-gas"],
           pow: argv.pow,
           payloadHex: argv["payload-hex"],
           dryRun: argv["dry-run"],
@@ -347,8 +391,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           .option("script", { type: "string", describe: "Path to compiled .pvm file when not using --manifest" })
           .option("abi", { type: "string", describe: "Path to compiled .abi file when not using --manifest" })
           .option("debug", { type: "string", describe: "Optional path to .debug file when not using --manifest" })
-          .option("gas-price", { type: "number", describe: "Gas price passed to AllowGas" })
-          .option("gas-limit", { type: "number", describe: "Gas limit passed to AllowGas" })
+          .option("max-gas", { type: "string", describe: "Gas ceiling in KCAL. Left out, it is read from the chain's estimate" })
           .option("pow", { type: "number", describe: "Proof-of-work difficulty for the VM script transaction" })
           .option("payload-hex", { type: "string", describe: "Optional transaction payload as raw hex" })
           .option("dry-run", { type: "boolean", describe: "Build and sign the transaction without broadcasting" }),
@@ -364,8 +407,7 @@ export async function runContractCli(rawArgv: string[]): Promise<void> {
           script: argv.script,
           abi: argv.abi,
           debug: argv.debug,
-          gasPrice: argv["gas-price"],
-          gasLimit: argv["gas-limit"],
+          maxGas: argv["max-gas"],
           pow: argv.pow,
           payloadHex: argv["payload-hex"],
           dryRun: argv["dry-run"],

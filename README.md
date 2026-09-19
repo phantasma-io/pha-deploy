@@ -112,9 +112,9 @@ Required token inputs by action:
 
 ### Fees
 
-There is nothing to configure. Every token transaction is priced by the chain: the CLI builds the
-message, asks the node for its gas config, and plans the gas offer and the storage deposit from that
-exact message. Both are printed before the transaction is sent, and the gas the chain actually
+There is nothing to configure. Every transaction is priced by the chain. A token transaction is a
+Carbon message: the CLI builds it, asks the node for its gas config, and plans the gas offer and
+the storage deposit from that exact message. Both are printed before the transaction is sent, and the gas the chain actually
 billed is printed after it settles:
 
 ```text
@@ -255,10 +255,11 @@ Shared deploy/upgrade/attach flags:
 - `--script <path>`: compiled `.pvm`
 - `--abi <path>`: compiled `.abi`
 - `--debug <path>`: optional `.debug`
-- `--gas-price <int>`: gas price for `AllowGas`, default `100000`
-- `--gas-limit <int>`: gas units allowed for `AllowGas`, default `3000000`. `AllowGas` escrows
-  `gas-price * gas-limit` and refunds what the script does not spend, so this is a ceiling, and it
-  is set above what a deployment needs.
+- `--max-gas <KCAL>`: optional gas ceiling. Left out, the CLI asks the chain what the transaction
+  costs and offers the ceiling the chain recommends. The ceiling is refunded down to the settled
+  bill, and an aborted transaction is billed the whole ceiling, so a ceiling set by hand should be
+  above the real cost. The chain's estimate has to be reachable: pass this flag when the node does
+  not serve one.
 - `--pow <int>`
 - `--payload-hex <hex>`
 - `--dry-run`
@@ -276,6 +277,21 @@ Deploy/upgrade output always includes:
 - ABI byte count
 - generated VM script hex
 - signed transaction hex
+- the expected bill, the offered ceiling and the storage rows the transaction grows
+
+The contract lifecycle is a VM script and no formula prices a script, so the ceiling comes from the
+chain's own estimate instead. The CLI builds the transaction, asks the node to dry-run it, and
+offers the ceiling the node recommends:
+
+```text
+Gas, from the chain's estimate:
+  gas bill        <amount> KCAL (<atoms> atoms)
+  gas offer       up to <amount> KCAL (<atoms> atoms)
+  storage         <rows> rows, <atoms> atoms escrowed
+```
+
+Nothing is broadcast by the estimate. When the node does not serve estimates the CLI says so and
+names `--max-gas`, which sets the ceiling by hand.
 
 Attach output also prints the resolved token symbol used for the interop call.
 

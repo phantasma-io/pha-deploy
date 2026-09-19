@@ -8,26 +8,21 @@ import {
   Transaction,
 } from "phantasma-sdk-ts";
 import { waitForTx } from "../actions/waitForTx";
+import {
+  EstimatedGasCeiling,
+  estimateGasCeiling,
+  gasPair,
+  payerGasBalance,
+} from "./gasCeiling";
 import { requireRpcTxHash } from "../rpc/txHash";
 
 export type ContractOperation = "deploy" | "upgrade" | "attach";
 
 /**
- * Gas units the contract lifecycle allows itself when the caller names no `--gas-limit`.
- *
- * `AllowGas` escrows `gasPrice * gasLimit` and refunds what the script does not spend, so this
- * value is a ceiling, and whatever the script does not spend comes back. It has to be large enough
- * for a real deployment on any network. The cost comes mostly from the DeployContract interop, and
- * the size of the script moves it very little. The SDK's own `DefaultGasLimit` is 100,000 units,
- * which does not clear a deployment.
- *
- * A constant does not follow the chain. Governance can raise the price of the DeployContract
- * interop, and this ceiling then stops covering a deployment. A transaction that runs out of gas
- * is still billed its whole allowance, so each failed attempt costs `gasPrice * gasLimit`. The
- * chain names that case in its debug comment, as `gasLimit [interop=Runtime.DeployContract ...]`.
- * Raise `--gas-limit` when it appears.
+ * How long a lifecycle transaction stays valid. The probe the chain prices and the transaction
+ * that is sent are built separately, so the window has to cover both.
  */
-export const DEFAULT_LIFECYCLE_GAS_LIMIT = 3_000_000;
+const LIFECYCLE_EXPIRY_MS = 5 * 60 * 1000;
 
 export interface PreparedContractTransaction {
   operation: ContractOperation;
@@ -38,6 +33,10 @@ export interface PreparedContractTransaction {
   scriptBytes: number;
   abiBytes: number;
   attachSymbol?: string;
+  /** Expiry written into the transaction. The envelope for an estimate has to carry the same one. */
+  expiration: Date;
+  /** Gas ceiling this transaction offers, in gas-token atoms. */
+  gasCeiling: bigint;
 }
 
 export interface ExecuteContractTransactionOptions {
@@ -47,8 +46,11 @@ export interface ExecuteContractTransactionOptions {
   chain?: string;
   wif: string;
   bundle: ContractArtifactBundle;
-  gasPrice?: number;
-  gasLimit?: number;
+  /**
+   * Gas ceiling to offer, in gas-token atoms. Left out, it is read from the chain's estimate.
+   * Set, it overrides the estimate and the estimate is not asked for.
+   */
+  maxGas?: bigint;
   proofOfWork?: number;
   payloadHex?: string;
   dryRun?: boolean;
@@ -62,6 +64,8 @@ export interface ExecuteContractTransactionResult {
   success?: boolean;
   result?: string;
   broadcastError?: string;
+  /** What the chain's estimate reported. Absent when the caller set the ceiling by hand. */
+  estimate?: EstimatedGasCeiling;
 }
 
 function normalizeAttachSymbol(
@@ -74,19 +78,6 @@ function normalizeAttachSymbol(
   }
 
   return attachSymbol;
-}
-
-function normalizeLifecycleGas(
-  value: number | undefined,
-  fallback: number,
-  label: string,
-): number {
-  const numeric = value ?? fallback;
-  if (!Number.isSafeInteger(numeric) || numeric <= 0) {
-    throw new Error(`${label} must be a positive safe integer`);
-  }
-
-  return numeric;
 }
 
 function buildAttachScript(
@@ -117,6 +108,7 @@ function buildAndSignTransaction(
   options: ExecuteContractTransactionOptions,
   keys: PhantasmaKeys,
   scriptHex: string,
+  expiration: Date,
 ): string {
   const nexus = options.nexus.trim();
   const chain = (options.chain ?? "main").trim();
@@ -128,13 +120,7 @@ function buildAndSignTransaction(
   }
 
   const payloadHex = options.payloadHex?.trim() ?? "";
-  const tx = new Transaction(
-    nexus,
-    chain,
-    scriptHex,
-    new Date(Date.now() + 5 * 60 * 1000),
-    payloadHex,
-  );
+  const tx = new Transaction(nexus, chain, scriptHex, expiration, payloadHex);
   const proofOfWork = options.proofOfWork ?? ProofOfWork.Minimal;
   if (proofOfWork > 0) {
     tx.mineTransaction(proofOfWork);
@@ -143,23 +129,20 @@ function buildAndSignTransaction(
   return tx.ToStringEncoded(true).toUpperCase();
 }
 
+/**
+ * Builds and signs one lifecycle transaction at the given gas ceiling.
+ *
+ * The ceiling is decided by the caller, because the same function builds the probe the chain
+ * prices and the transaction that is finally sent.
+ */
 export function prepareContractTransaction(
   options: ExecuteContractTransactionOptions,
+  maxGas: bigint,
 ): PreparedContractTransaction {
   const keys = PhantasmaKeys.fromWIF(options.wif);
   const fromAddress = keys.Address.Text;
-  // Resolved here rather than left to the SDK: its default allowance does not clear a deployment
-  // (see DEFAULT_LIFECYCLE_GAS_LIMIT).
-  const gasLimit = normalizeLifecycleGas(
-    options.gasLimit,
-    DEFAULT_LIFECYCLE_GAS_LIMIT,
-    "gasLimit",
-  );
-  const gasPrice = normalizeLifecycleGas(
-    options.gasPrice,
-    ContractTxHelper.DefaultGasPrice,
-    "gasPrice",
-  );
+  const { gasPrice, gasLimit, ceiling } = gasPair(maxGas);
+  const expiration = new Date(Date.now() + LIFECYCLE_EXPIRY_MS);
   const attachSymbol =
     options.operation === "attach"
       ? normalizeAttachSymbol(options.attachSymbol, options.bundle)
@@ -184,11 +167,12 @@ export function prepareContractTransaction(
 
   const txHex =
     options.operation === "attach"
-      ? buildAndSignTransaction(options, keys, scriptHex)
+      ? buildAndSignTransaction(options, keys, scriptHex, expiration)
       : options.operation === "deploy"
         ? ContractTxHelper.buildDeployTransactionAndEncode({
             nexus: options.nexus,
             chain: options.chain,
+            expiration,
             signer: keys,
             from: fromAddress,
             contractName: options.bundle.contractName,
@@ -202,6 +186,7 @@ export function prepareContractTransaction(
         : ContractTxHelper.buildUpgradeTransactionAndEncode({
             nexus: options.nexus,
             chain: options.chain,
+            expiration,
             signer: keys,
             from: fromAddress,
             contractName: options.bundle.contractName,
@@ -222,21 +207,59 @@ export function prepareContractTransaction(
     scriptBytes: options.bundle.script.length,
     abiBytes: options.bundle.abi.length,
     ...(attachSymbol ? { attachSymbol } : {}),
+    expiration,
+    gasCeiling: ceiling,
   };
+}
+
+/**
+ * Reads the gas ceiling for one lifecycle transaction from the chain.
+ *
+ * A probe transaction is built at the largest ceiling the payer could offer, which is the whole
+ * balance, and the chain prices it. The probe is signed because the chain refuses an envelope its
+ * gas payer did not sign, and it is never broadcast.
+ *
+ * The probe carries a larger number in its `AllowGas` call than the transaction that is finally
+ * sent, so its script is a few bytes longer and its bill a few atoms higher. The recommendation
+ * carries a margin that covers the difference.
+ */
+async function readGasCeilingFromChain(
+  options: ExecuteContractTransactionOptions,
+  rpc: PhantasmaAPI,
+): Promise<EstimatedGasCeiling> {
+  const keys = PhantasmaKeys.fromWIF(options.wif);
+  const offered = await payerGasBalance(rpc, keys.Address.Text);
+  const probe = prepareContractTransaction(options, offered);
+  return estimateGasCeiling(rpc, {
+    txHex: probe.txHex,
+    expiration: probe.expiration,
+    publicKey: keys.publicKey,
+    offered: probe.gasCeiling,
+  });
 }
 
 export async function executeContractTransaction(
   options: ExecuteContractTransactionOptions,
 ): Promise<ExecuteContractTransactionResult> {
-  const prepared = prepareContractTransaction(options);
+  const rpc = new PhantasmaAPI(options.rpc, null, options.nexus);
+
+  // A ceiling set by hand is taken as given. Otherwise the chain names it, so that no fee number
+  // originates in this CLI.
+  const estimate =
+    options.maxGas === undefined
+      ? await readGasCeilingFromChain(options, rpc)
+      : undefined;
+  const maxGas = estimate?.maxGas ?? (options.maxGas as bigint);
+
+  const prepared = prepareContractTransaction(options, maxGas);
   if (options.dryRun) {
     return {
       prepared,
       dryRun: true,
+      ...(estimate ? { estimate } : {}),
     };
   }
 
-  const rpc = new PhantasmaAPI(options.rpc, null, options.nexus);
   let txHash: string;
   try {
     txHash = requireRpcTxHash(
@@ -250,6 +273,7 @@ export async function executeContractTransaction(
       success: false,
       result: "",
       broadcastError: err instanceof Error ? err.message : String(err),
+      ...(estimate ? { estimate } : {}),
     };
   }
   const waitResult = await waitForTx(rpc, txHash);
@@ -260,5 +284,6 @@ export async function executeContractTransaction(
     txHash,
     success: waitResult.success,
     result: waitResult.result,
+    ...(estimate ? { estimate } : {}),
   };
 }
