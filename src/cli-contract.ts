@@ -203,8 +203,14 @@ async function handleContractBroadcast(
     console.log(
       `  gas bill        ${kcal(result.estimate.expectedBill)} (${result.estimate.expectedBill} atoms)`,
     );
+    // The offer is the chain's recommendation, or the whole balance when the balance covers the
+    // bill and not the recommendation. The second case is said, because the margin is gone then.
+    const capped = result.prepared.gasCeiling < result.estimate.recommendedMaxGas;
     console.log(
-      `  gas offer       up to ${kcal(result.prepared.gasCeiling)} (${result.prepared.gasCeiling} atoms)`,
+      `  gas offer       up to ${kcal(result.prepared.gasCeiling)} (${result.prepared.gasCeiling} atoms)` +
+        (capped
+          ? `, the whole balance; the chain recommends ${kcal(result.estimate.recommendedMaxGas)}`
+          : ""),
     );
     // A VM script cannot declare a storage ceiling, so the escrow is reported and never capped.
     console.log(

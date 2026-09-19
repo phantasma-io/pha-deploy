@@ -107,11 +107,40 @@ test("the gas ceiling comes from the chain's estimate when the caller names none
   assert.equal(calls.estimates, 1);
   assert.equal(calls.balances, 1);
   assert.equal(result.estimate?.maxGas, 115056384471250n);
+  assert.equal(result.estimate?.recommendedMaxGas, 115056384471250n);
   assert.equal(result.estimate?.expectedBill, 100049029975000n);
   assert.equal(result.estimate?.dataRows, 5n);
   // The offered ceiling is the recommendation, rounded up to whole gas units.
   assert.ok(result.prepared.gasCeiling >= 115056384471250n);
   assert.ok(result.prepared.gasCeiling < 115056384471250n + 100_000n);
+});
+
+test("the offer is capped at the payer's balance when it cannot cover the recommendation", async (t) => {
+  // A balance that covers the bill of 100,049,029,975,000 atoms and not the recommendation of
+  // 115,056,384,471,250. The probe offers the balance and the chain prices it inside that ceiling.
+  const calls = stubChain(t, estimateReply("115056384471250"), "100100000000000");
+  const originalSend = PhantasmaAPI.prototype.sendRawTransaction;
+  PhantasmaAPI.prototype.sendRawTransaction = async () =>
+    ({ error: "expected proof of work" } as unknown as string);
+  t.after(() => {
+    PhantasmaAPI.prototype.sendRawTransaction = originalSend;
+  });
+
+  const result = await executeContractTransaction({
+    operation: "deploy",
+    rpc: "http://localhost:5172/rpc",
+    nexus: "SIMNET",
+    chain: "main",
+    wif: TEST_WIF,
+    bundle: sampleBundle(),
+    proofOfWork: 0,
+  });
+
+  assert.equal(calls.estimates, 1);
+  assert.equal(result.estimate?.recommendedMaxGas, 115056384471250n);
+  // The whole balance, which is already a whole number of gas units, so nothing is rounded.
+  assert.equal(result.estimate?.maxGas, 100_100_000_000_000n);
+  assert.equal(result.prepared.gasCeiling, 100_100_000_000_000n);
 });
 
 test("a ceiling named by the caller is used and the chain is not asked", async (t) => {

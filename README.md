@@ -290,8 +290,10 @@ Gas, from the chain's estimate:
   storage         <rows> rows, <atoms> atoms escrowed
 ```
 
-Nothing is broadcast by the estimate. When the node does not serve estimates the CLI says so and
-names `--max-gas`, which sets the ceiling by hand.
+The offered ceiling is the chain's recommendation, which is the bill plus a margin. When the payer's
+balance covers the bill but not the recommendation, the whole balance is offered instead and the
+output says so. Nothing is broadcast by the estimate. When the node does not serve estimates the
+CLI says so and names `--max-gas`, which sets the ceiling by hand.
 
 Attach output also prints the resolved token symbol used for the interop call.
 

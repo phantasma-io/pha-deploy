@@ -103,8 +103,16 @@ export function ceilingWithin(balance: bigint): bigint {
 }
 
 export interface EstimatedGasCeiling {
-  /** The recommended ceiling, in gas-token atoms. It is the bill plus the service's margin. */
+  /**
+   * The ceiling to offer, in gas-token atoms. It is the chain's recommendation, or the payer's
+   * whole balance when the balance covers the bill but not the recommendation.
+   */
   maxGas: bigint;
+  /**
+   * The chain's recommendation: the bill plus the service's margin. It is above `maxGas` only when
+   * the balance capped the offer.
+   */
+  recommendedMaxGas: bigint;
   /** The bill the dry run settled. The real transaction should come in at or below it. */
   expectedBill: bigint;
   /** Storage rows the transaction grows. The escrow for them is paid on top of the gas bill. */
@@ -170,8 +178,15 @@ export async function estimateGasCeiling(
     );
   }
 
+  // The recommendation carries a margin above the bill. A payer whose balance covers the bill but
+  // not the margin would be refused at fee escrow for a transaction that settles, so the offer is
+  // capped at what the payer holds. `offered` is the probe's ceiling, which is the balance rounded
+  // down to whole gas units, and the probe was priced inside it, so the bill fits inside it too.
+  const recommended = BigInt(result.recommendedMaxGas);
+  const maxGas = recommended <= request.offered ? recommended : request.offered;
   return {
-    maxGas: BigInt(result.recommendedMaxGas),
+    maxGas,
+    recommendedMaxGas: recommended,
     expectedBill: BigInt(result.gasBillKcalBase),
     dataRows: BigInt(result.dataRows),
     dataEscrow: BigInt(result.dataEscrowAtoms),
