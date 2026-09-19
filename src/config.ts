@@ -104,13 +104,9 @@ function parseMetadataFieldArray(
         !Array.isArray(entry) &&
         "name" in entry &&
         "value" in entry &&
-        typeof (entry as any).name === "string"
+        typeof entry.name === "string"
       ) {
-        return makeMetadataField(
-          (entry as any).name,
-          (entry as any).value,
-          `${context}[${idx}]`,
-        );
+        return makeMetadataField(entry.name, entry.value, `${context}[${idx}]`);
       }
       throw new Error(
         `${context}[${idx}] must be an object like { name: string; value: ... }`,
@@ -156,7 +152,7 @@ function parseBigInt(value?: string | bigint | null): bigint | undefined {
  * The parsed result is stored in the module-scoped `tomlConfig` object and used as
  * the source of truth for configuration values unless overridden by CLI flags.
  */
-let tomlConfig: Record<string, any> = {};
+let tomlConfig: Record<string, unknown> = {};
 
 function loadToml(configPath?: string | null) {
   const file = configPath ? configPath : "config.toml";
@@ -166,7 +162,7 @@ function loadToml(configPath?: string | null) {
       const raw = fs.readFileSync(resolved, { encoding: "utf8" });
       // Parse TOML into a plain object. If parse fails, keep an empty config.
       try {
-        tomlConfig = toml.parse(raw) as Record<string, any>;
+        tomlConfig = toml.parse(raw) as Record<string, unknown>;
       } catch {
         tomlConfig = {};
       }
@@ -198,7 +194,7 @@ function pickValue<T = string | undefined>(
 
   // Fall back to TOML configuration.
   if (tomlConfig) {
-    return tomlConfig[tomlKey] as unknown as T;
+    return tomlConfig[tomlKey] as T;
   }
 
   return undefined;

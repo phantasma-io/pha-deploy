@@ -237,7 +237,7 @@ async function main() {
     .version(false)
     .parseSync();
 
-  if ((pre as any).help) {
+  if (pre.help) {
     printHelp();
     return;
   }
@@ -307,7 +307,7 @@ async function main() {
     .epilog("pha-deploy - Phantasma token deployment and minting CLI");
 
   const argv = await parser.parseAsync();
-  if ((argv as any).help) {
+  if (argv.help) {
     printHelp();
     return;
   }
@@ -315,8 +315,8 @@ async function main() {
   // Load TOML configuration (if present) before doing full parsing
   const cfg = loadConfig({ configPath: pre.config ?? null });
 
-  const rpcLogEnabled = Boolean((argv as any)["rpc-log"]);
-  const settingsLogEnabled = Boolean((argv as any)["settings-log"]);
+  const rpcLogEnabled = Boolean(argv["rpc-log"]);
+  const settingsLogEnabled = Boolean(argv["settings-log"]);
   if (rpcLogEnabled) {
     // SDK logs JSON-RPC responses as raw objects; inspect avoids [Object] output.
     setLogger({
@@ -335,13 +335,13 @@ async function main() {
   }
 
   // Determine dry-run (CLI flag overrides config)
-  const dryRun = Boolean((argv as any)["dry-run"]) || cfg.dryRun || false;
+  const dryRun = Boolean(argv["dry-run"]) || cfg.dryRun || false;
 
   // One-shot actions: pick the first matching action
-  const actions = ["create-token", "create-series", "mint-fungible", "mint-nft"];
+  const actions = ["create-token", "create-series", "mint-fungible", "mint-nft"] as const;
   let foundAction = false;
   for (const action of actions) {
-    if ((argv as any)[action]) {
+    if (argv[action]) {
       foundAction = true;
       switch (action) {
         case "create-token": {
