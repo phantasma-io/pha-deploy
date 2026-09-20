@@ -42,7 +42,7 @@ node dist/cli.js --help
 Example version output:
 
 ```text
-pha-deploy 0.5.1
+pha-deploy 0.6.0
 pha-tomb version 2.1.0
 pha-tomb path /usr/local/bin/pha-tomb
 ```
