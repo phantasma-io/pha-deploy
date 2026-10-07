@@ -152,7 +152,6 @@ pha-deploy contract compile \
   --compiler /path/to/pha-tomb \
   --out ./dist/contracts/demo \
   --debug \
-  --protocol 16 \
   --nativecheck warn
 ```
 
