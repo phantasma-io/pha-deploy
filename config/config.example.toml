@@ -32,6 +32,14 @@ token_type = "nft"
 # token_max_supply = 1000000000000
 # fungible_decimals = 8
 
+# Seal the token against VM contracts at creation (optional). A sealed token never gets a VM
+# contract, from its owner or from governance. Only a token without a contract can be sealed, and
+# the seal cannot be removed. The seal blocks VM contracts only. A sealed token can be minted,
+# transferred and burned, and it can get new NFT series and NFT mints. Its other metadata fields
+# can be changed. To seal a token that already exists, run --seal-token-contract with its
+# carbon_token_id below.
+# token_contract_sealed = true
+
 # Optional: If your token has been deployed already, provide carbon token ID below:
 carbon_token_id = 0
 # Optional: If your token's series has been deployed already, provide both identifiers below.

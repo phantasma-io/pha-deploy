@@ -7,6 +7,7 @@ import { createToken, createTokenCfg } from "./actions/createToken";
 import { createSeries, createSeriesCfg } from "./actions/createSeries";
 import { mintFungibleToken, mintFungibleTokenCfg } from "./actions/mintFungibleToken";
 import { mintNftToken, mintNftTokenCfg } from "./actions/mintNftToken";
+import { sealTokenContract, sealTokenContractCfg } from "./actions/sealTokenContract";
 import { PhantasmaKeys, setLogger } from "phantasma-sdk-ts";
 import { runContractCli } from "./cli-contract";
 import { buildVersionReport, renderVersionReport } from "./version";
@@ -23,6 +24,7 @@ import { buildVersionReport, renderVersionReport } from "./version";
  *  - create-series
  *  - mint-fungible
  *  - mint-nft
+ *  - seal-token-contract
  */
 
 function printHelp(): void {
@@ -32,6 +34,7 @@ function printHelp(): void {
   pha-deploy --create-series [options]
   pha-deploy --mint-fungible [options]
   pha-deploy --mint-nft [options]
+  pha-deploy --seal-token-contract [options]
 
 Actions:
   contract compile       Compile a contract through pha-tomb from PATH or an explicit override
@@ -42,6 +45,7 @@ Actions:
   --create-series      Create a token series
   --mint-fungible      Mint fungible tokens
   --mint-nft           Mint tokens
+  --seal-token-contract  Seal an existing token against VM contracts, permanently
 
 Common flags:
   --config <path>               Path to TOML config file (default: config.toml)
@@ -60,7 +64,8 @@ Overrides (replace values from config.toml when provided):
   --token-max-supply <int>      Non-negative integer; required when token-type=fungible
   --fungible-max-supply <int>   Alias for --token-max-supply
   --fungible-decimals <0..255>  Decimal places; required when token-type=fungible
-  --carbon-token-id <int>       Existing carbon token ID (for series or mint)
+  --token-contract-sealed       Seal the token against VM contracts at creation (see --seal-token-contract)
+  --carbon-token-id <int>       Existing carbon token ID (for series, mint or seal)
   --phantasma-series-id <int>   Existing Phantasma series ID (required for deterministic mint)
   --mint-fungible-to <address>  Recipient address for fungible mint (default: WIF owner)
   --mint-fungible-amount <int>  Amount to mint (integer atomic units)
@@ -119,6 +124,7 @@ async function actionCreateToken(
       tokenType,
       cfg.tokenMaxSupply,
       cfg.fungibleDecimals,
+      cfg.tokenContractSealed === true,
     ),
     dryRun,
     logSettings,
@@ -207,6 +213,23 @@ async function actionMintFungible(
   );
 }
 
+async function actionSealTokenContract(
+  cfg: Config,
+  dryRun: boolean,
+  logSettings: boolean,
+) {
+  requireArg(cfg.rpc, "rpc");
+  requireArg(cfg.nexus, "nexus");
+  requireArg(cfg.wif, "wif");
+  requireArg(cfg.carbonTokenId, "carbon_token_id");
+
+  await sealTokenContract(
+    new sealTokenContractCfg(cfg.rpc, cfg.nexus, cfg.wif, cfg.carbonTokenId),
+    dryRun,
+    logSettings,
+  );
+}
+
 /* ------------------------------- Main ------------------------------- */
 
 async function main() {
@@ -245,7 +268,9 @@ async function main() {
   // Minimal yargs parsing for the top-level CLI behavior
   const parser = yargs(rawArgv)
     .scriptName("pha-deploy")
-    .usage("Usage: $0 [options] [--create-token|--create-series|--mint-fungible|--mint-nft]")
+    .usage(
+      "Usage: $0 [options] [--create-token|--create-series|--mint-fungible|--mint-nft|--seal-token-contract]",
+    )
     .option("rpc", { type: "string", describe: "RPC endpoint" })
     .option("nexus", { type: "string", describe: "Chain nexus" })
     .option("wif", { type: "string", describe: "WIF for signing" })
@@ -264,6 +289,10 @@ async function main() {
       type: "number",
       describe:
         "Decimal places for fungible token (required when --token-type fungible)",
+    })
+    .option("token-contract-sealed", {
+      type: "boolean",
+      describe: "Seal the token against VM contracts at creation",
     })
     .option("dry-run", {
       type: "boolean",
@@ -295,6 +324,10 @@ async function main() {
     })
     .option("mint-fungible", { type: "boolean", describe: "Mint fungible tokens" })
     .option("mint-nft", { type: "boolean", describe: "Mint tokens" })
+    .option("seal-token-contract", {
+      type: "boolean",
+      describe: "Seal an existing token against VM contracts",
+    })
     .option("mint-fungible-to", {
       type: "string",
       describe: "Recipient address for fungible mint (default: WIF owner)",
@@ -338,7 +371,13 @@ async function main() {
   const dryRun = Boolean(argv["dry-run"]) || cfg.dryRun || false;
 
   // One-shot actions: pick the first matching action
-  const actions = ["create-token", "create-series", "mint-fungible", "mint-nft"] as const;
+  const actions = [
+    "create-token",
+    "create-series",
+    "mint-fungible",
+    "mint-nft",
+    "seal-token-contract",
+  ] as const;
   let foundAction = false;
   for (const action of actions) {
     if (argv[action]) {
@@ -358,6 +397,10 @@ async function main() {
         }
         case "mint-nft": {
           await actionMintNft(cfg, dryRun, settingsLogEnabled);
+          return;
+        }
+        case "seal-token-contract": {
+          await actionSealTokenContract(cfg, dryRun, settingsLogEnabled);
           return;
         }
       }

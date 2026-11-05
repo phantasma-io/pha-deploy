@@ -23,6 +23,7 @@ export interface Config {
   tokenType?: TokenType | null;
   tokenMaxSupply?: bigint | null;
   fungibleDecimals?: number | null;
+  tokenContractSealed?: boolean | null;
 
   // Series
   carbonTokenSeriesId?: number | null;
@@ -148,6 +149,21 @@ function parseBigInt(value?: string | bigint | null): bigint | undefined {
 }
 
 /**
+ * Returns the value of a switch whose effect on chain cannot be undone, such as
+ * `token_contract_sealed`. Only true and false are read, and any other value is refused.
+ */
+function parseSwitch(value: unknown, name: string): boolean | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (v === "true") return true;
+    if (v === "false") return false;
+  }
+  throw new Error(`${name} must be true or false`);
+}
+
+/**
  * Load TOML configuration from a provided path (if exists) or from default `config.toml`.
  * The parsed result is stored in the module-scoped `tomlConfig` object and used as
  * the source of truth for configuration values unless overridden by CLI flags.
@@ -238,6 +254,7 @@ export function loadConfig(options?: {
     tokenType: null,
     tokenMaxSupply: null,
     fungibleDecimals: null,
+    tokenContractSealed: null,
     nftMetadata: null,
     mintFungibleTo: null,
     mintFungibleAmount: null,
@@ -352,6 +369,11 @@ export function loadConfig(options?: {
         | string
         | number
         | undefined,
+    ) ?? null;
+  cfg.tokenContractSealed =
+    parseSwitch(
+      pickValue(argv, "token-contract-sealed", "token_contract_sealed"),
+      "token_contract_sealed",
     ) ?? null;
 
   // NFT metadata

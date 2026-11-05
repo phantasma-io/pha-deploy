@@ -8,6 +8,7 @@ Current surface area:
   - `--create-series`
   - `--mint-fungible`
   - `--mint-nft`
+  - `--seal-token-contract`
 - Contract actions:
   - `contract compile`
   - `contract deploy`
@@ -55,6 +56,7 @@ pha-deploy --create-token [options]
 pha-deploy --create-series [options]
 pha-deploy --mint-fungible [options]
 pha-deploy --mint-nft [options]
+pha-deploy --seal-token-contract [options]
 ```
 
 ## Token Workflow
@@ -82,6 +84,7 @@ Common token flags:
 - `--token-max-supply <int>`
 - `--fungible-max-supply <int>`
 - `--fungible-decimals <0..255>`
+- `--token-contract-sealed`
 - `--carbon-token-id <int>`
 - `--phantasma-series-id <int>`
 - `--mint-fungible-to <address>`
@@ -98,6 +101,8 @@ Required token inputs by action:
   - requires `rpc`, `nexus`, `wif`, `symbol`
   - NFT path requires `token_schemas`
   - fungible path requires `token_max_supply` and `fungible_decimals`
+- `--seal-token-contract`
+  - requires `carbon_token_id`
 - `--create-series`
   - requires `carbon_token_id`, `token_schemas`, `series_metadata`
 - `--mint-nft`
@@ -109,6 +114,25 @@ Required token inputs by action:
 `series_metadata` and `nft_metadata` accept either:
 - a JSON object of `name -> value`
 - an array of `{ "name": "...", "value": ... }`
+
+### Sealing a token against contracts
+
+A sealed token never gets a VM contract, from its owner or from governance. Only a token without a
+contract can be sealed, and the seal cannot be removed.
+
+The seal blocks VM contracts only. A sealed token can be minted, transferred and burned, and it can
+get new NFT series and NFT mints. Its other metadata fields can be changed.
+
+- At creation: `--token-contract-sealed`, or `token_contract_sealed = true` in the config.
+- Later: `--seal-token-contract` with the token's `carbon_token_id`, signed by the token owner.
+
+The seal is the metadata field `_sealed_c` holding the Int64 value 1, so `token_metadata` cannot
+carry it.
+
+The fee planner has no formula for the seal of an existing token, so its plan is printed as a ceiling
+(`up to`) and the bill stays within it. The chain refuses to seal a token that has a contract and
+bills nothing for that refusal. Sealing a token that is sealed already changes nothing and is billed as
+a metadata update.
 
 ### Fees
 
@@ -313,6 +337,12 @@ pha-deploy --mint-fungible \
   --config ./config.toml \
   --carbon-token-id 123 \
   --mint-fungible-amount 100000000
+```
+
+Seal an existing token:
+
+```bash
+pha-deploy --seal-token-contract --config ./config.toml --carbon-token-id 123
 ```
 
 Compile, then deploy from the emitted manifest:

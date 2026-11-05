@@ -4,6 +4,7 @@ import {
   IntX,
   PhantasmaAPI,
   PhantasmaKeys,
+  StandardMeta,
   TokenInfoBuilder,
   TokenMetadataBuilder,
   TokenSchemas,
@@ -23,6 +24,7 @@ export class createTokenCfg {
     public tokenType: TokenType,
     public tokenMaxSupply: bigint | null | undefined,
     public fungibleDecimals: number | null | undefined,
+    public contractSealed: boolean = false,
   ) {
     this.rpc = rpc;
     this.nexus = nexus;
@@ -33,6 +35,7 @@ export class createTokenCfg {
     this.tokenType = tokenType;
     this.tokenMaxSupply = tokenMaxSupply;
     this.fungibleDecimals = fungibleDecimals;
+    this.contractSealed = contractSealed;
   }
 
   toPrintable() {
@@ -64,6 +67,15 @@ export async function createToken(
 
   if (cfg.tokenMetadataFields == null) {
     throw Error('Token metadata is mandatory');
+  }
+
+  // The contract seal is `_sealed_c` holding the Int64 1, and token_metadata holds strings. The SDK
+  // refuses the field too, and its message names the SDK option. This message names the CLI flag.
+  const metadataFields = cfg.tokenMetadataFields.fields ?? {};
+  if (Object.prototype.hasOwnProperty.call(metadataFields, StandardMeta.Token.sealed_contract.data)) {
+    throw Error(
+      "token_metadata cannot hold _sealed_c: seal the token with --token-contract-sealed or token_contract_sealed = true",
+    );
   }
 
   const tokenType = cfg.tokenType === "fungible" ? "fungible" : "nft";
@@ -108,7 +120,9 @@ export async function createToken(
     !isFungible,
     decimals,
     senderPubKey,
-    TokenMetadataBuilder.buildAndSerialize(cfg.tokenMetadataFields.fields),
+    TokenMetadataBuilder.buildAndSerialize(cfg.tokenMetadataFields.fields, {
+      sealContract: cfg.contractSealed,
+    }),
     cfg.tokenSchemas
   );
 
