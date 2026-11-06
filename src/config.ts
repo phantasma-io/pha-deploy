@@ -57,6 +57,22 @@ function tryParseJSON<T = unknown>(value?: string | null): T | undefined {
   }
 }
 
+function isMetadataScalar(
+  value: unknown,
+): value is string | number | bigint | Uint8Array {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    value instanceof Uint8Array
+  );
+}
+
+/**
+ * A value is checked against its field's schema type by the SDK when the message is built. An array
+ * value is for an array field; an object is refused, because token_schemas cannot describe the
+ * fields of a struct.
+ */
 function makeMetadataField(
   name: string,
   value: unknown,
@@ -68,10 +84,8 @@ function makeMetadataField(
   }
 
   if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "bigint" ||
-    value instanceof Uint8Array
+    isMetadataScalar(value) ||
+    (Array.isArray(value) && value.every(isMetadataScalar))
   ) {
     const field = new MetadataField();
     field.name = trimmed;
@@ -80,7 +94,7 @@ function makeMetadataField(
   }
 
   throw new Error(
-    `${context}.${trimmed} must be a string, number, bigint or Uint8Array`,
+    `${context}.${trimmed} must be a string, number, bigint, Uint8Array or an array of them`,
   );
 }
 

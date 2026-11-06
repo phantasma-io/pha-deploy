@@ -115,6 +115,10 @@ Required token inputs by action:
 - a JSON object of `name -> value`
 - an array of `{ "name": "...", "value": ... }`
 
+A field whose schema type is an array, such as `Array_Int32`, `Array_String` or `Array_Bytes32`,
+takes a JSON array of its items: numbers for integers, text for strings and hex text for bytes
+(exactly 16, 32 or 64 bytes for `Bytes16`, `Bytes32` and `Bytes64`).
+
 No key of `token_metadata` may start with `_`, because the chain keeps such keys for its own settings.
 
 ### Sealing a token against contracts
