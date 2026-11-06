@@ -1,6 +1,6 @@
 {
   "name": "pha-deploy",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "CLI for Phantasma token and contract lifecycle workflows",
   "type": "commonjs",
   "main": "dist/index.js",
@@ -41,7 +41,7 @@
   "license": "MIT",
   "dependencies": {
     "@iarna/toml": "^2.2.5",
-    "phantasma-sdk-ts": "^0.20.1",
+    "phantasma-sdk-ts": "^0.20.2",
     "yargs": "^18.0.0"
   },
   "devDependencies": {
