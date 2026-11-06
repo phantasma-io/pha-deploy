@@ -115,6 +115,8 @@ Required token inputs by action:
 - a JSON object of `name -> value`
 - an array of `{ "name": "...", "value": ... }`
 
+No key of `token_metadata` may start with `_`, because the chain keeps such keys for its own settings.
+
 ### Sealing a token against contracts
 
 A sealed token never gets a VM contract, from its owner or from governance. Only a token without a
