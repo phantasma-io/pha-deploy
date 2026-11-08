@@ -115,9 +115,19 @@ Required token inputs by action:
 - a JSON object of `name -> value`
 - an array of `{ "name": "...", "value": ... }`
 
-A field whose schema type is an array, such as `Array_Int32`, `Array_String` or `Array_Bytes32`,
-takes a JSON array of its items: numbers for integers, text for strings and hex text for bytes
-(exactly 16, 32 or 64 bytes for `Bytes16`, `Bytes32` and `Bytes64`).
+Each value is checked against the type of its field in `token_schemas`:
+- text for `String`;
+- a number for an integer type, or a string of decimal digits for `Int64` and `Int256`. A value above
+  9007199254740991 or below -9007199254740991 must be such a string, because a JSON number that large
+  loses digits;
+- hex text for bytes, of exactly 16, 32 or 64 bytes for `Bytes16`, `Bytes32` and `Bytes64`;
+- a JSON array of items for an array type, such as `Array_Int32`, `Array_String` or `Array_Bytes32`;
+- a JSON object with a value for every field of a `Struct`;
+- `{ "type": "...", "value": ... }` for a `Dynamic` field. `type` is a type name as in `token_schemas`,
+  other than `Dynamic`, `Array_Dynamic`, `Struct` and `Array_Struct`. `value` is given as for that type.
+
+A `Struct` or `Array_Struct` field of `token_schemas` lists the fields of its struct under `fields`:
+`{ "name": "stats", "type": "Struct", "fields": [{ "name": "level", "type": "Int32" }] }`.
 
 No key of `token_metadata` may start with `_`, because the chain keeps such keys for its own settings.
 

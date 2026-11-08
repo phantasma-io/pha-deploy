@@ -3,7 +3,12 @@ import path from "path";
 import toml from "@iarna/toml";
 import yargs from "yargs/yargs";
 import { Metadata, MetadataFields } from "./actions/helpers";
-import { MetadataField, TokenSchemas, TokenSchemasBuilder } from "phantasma-sdk-ts";
+import {
+  MetadataField,
+  TokenSchemas,
+  TokenSchemasBuilder,
+  type MetadataValueInput,
+} from "phantasma-sdk-ts";
 
 export type TokenType = "nft" | "fungible";
 
@@ -69,9 +74,23 @@ function isMetadataScalar(
 }
 
 /**
- * A value is checked against its field's schema type by the SDK when the message is built. An array
- * value is for an array field; an object is refused, because token_schemas cannot describe the
- * fields of a struct.
+ * Returns true if the value is one the SDK's metadata builders take: a scalar, an array of values, or
+ * an object of values. An object is the value of a Struct field (its fields by name) or of a Dynamic
+ * field (`{ type, value }`).
+ */
+function isMetadataValue(value: unknown): value is MetadataValueInput {
+  if (isMetadataScalar(value)) return true;
+  if (Array.isArray(value)) return value.every(isMetadataValue);
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).every(isMetadataValue);
+  }
+  return false;
+}
+
+/**
+ * Returns the metadata field of one entry of `series_metadata` or `nft_metadata`. The SDK checks the
+ * value against its field's schema type when the message is built, so this only keeps out what no VM
+ * type takes, such as true, false and null.
  */
 function makeMetadataField(
   name: string,
@@ -83,10 +102,7 @@ function makeMetadataField(
     throw new Error(`${context}: metadata field name cannot be empty`);
   }
 
-  if (
-    isMetadataScalar(value) ||
-    (Array.isArray(value) && value.every(isMetadataScalar))
-  ) {
+  if (isMetadataValue(value)) {
     const field = new MetadataField();
     field.name = trimmed;
     field.value = value;
@@ -94,7 +110,7 @@ function makeMetadataField(
   }
 
   throw new Error(
-    `${context}.${trimmed} must be a string, number, bigint, Uint8Array or an array of them`,
+    `${context}.${trimmed} must be a string, a number, or an array or object of them`,
   );
 }
 
